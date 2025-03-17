@@ -182,6 +182,138 @@ def _(GAME_PATH, Path, pl, re, walk_script_files):
 
 
 @app.cell
+def _(GAME_PATH, extract_characters, pl, re, walk_script_files):
+    def extract_dialogue_and_choices():
+        characters = extract_characters()
+
+        # Compile regex patterns
+        voice_regex = re.compile(
+            r'^(?P<indent>\s*)voice\s+"(?P<voice>[^"]+)"', re.MULTILINE
+        )
+        character_regex = re.compile(
+            r"^(?P<indent>\s*)(?P<character>"
+            + "|".join(characters)
+            + r')\s"(?P<dialogue>[^"]+)(?P<closed>"?)',
+            re.MULTILINE,
+        )
+        label_re = re.compile(r"^\s*label ([a-z]\w+):$")
+        menu_re = re.compile(r"(?P<indent>^\s+)menu:")
+        option_re = re.compile(r'(?P<indent>^\s+)"(?P<option>[^"]+)"')
+
+        for path in walk_script_files():
+            path_clean = str(path.relative_to(GAME_PATH))
+            current_label = None
+            current_indent = None
+            continue_dialogue = None
+            current = None
+
+            menu_indent = None
+            menu_index = 0
+
+            for i, line in enumerate(path.read_text().splitlines(), 1):
+                # Check for label definitions
+                if label_match := label_re.search(line):
+                    current_label = label_match.group(1)
+
+                # Check for voice lines
+                if voice_match := voice_regex.search(line):
+                    current_indent = voice_match.group("indent")
+                    current = {
+                        "key": f"{path_clean}:{i:05d}",
+                        "path": path_clean,
+                        "lineno": i,
+                        "label": current_label,
+                        "voice": voice_match.group("voice"),
+                        "type": "voice_line",
+                    }
+                    continue_dialogue = False
+                elif char_match := character_regex.search(line):
+                    if char_match.group("indent") != current_indent:
+                        continue
+                    current.update(
+                        {
+                            "character": char_match.group("character"),
+                            "dialogue": char_match.group("dialogue"),
+                        }
+                    )
+                    continue_dialogue = char_match.group("closed") != '"'
+                    if not continue_dialogue:
+                        yield current
+                elif continue_dialogue:
+                    match = re.search(r'\s*([^"]+)"', line)
+                    if match:
+                        print("extending line")
+                        print(line)
+                        current["dialogue"] += f" {match.group(1)}"
+                        continue_dialogue = False
+                        yield current
+
+                # Check for menu choices
+                if menu_match := menu_re.search(line):
+                    menu_indent = len(menu_match.group("indent"))
+                    menu_index += 1
+                if option_match := option_re.search(line):
+                    if (
+                        menu_indent is None
+                        or len(option_match.group("indent")) != menu_indent + 4
+                    ):
+                        continue
+                    yield {
+                        "key": f"{path_clean}:{i:05d}",
+                        "path": path_clean,
+                        "lineno": i,
+                        "label": current_label,
+                        "menu": menu_index,
+                        "option": option_match.group("option"),
+                        "type": "menu_choice",
+                    }
+
+
+    lines_and_choices = pl.DataFrame(extract_dialogue_and_choices())
+    lines_and_choices
+    return extract_dialogue_and_choices, lines_and_choices
+
+
+@app.cell
+def _(lines_and_choices, pl, re):
+    import random
+
+    choices_todo = (
+        lines_and_choices.filter(
+            (pl.col("type") == "menu_choice")
+            & (
+                pl.col("path")
+                == "scripts/paths/stranger/stranger_1/stranger_1_cabin.rpy"
+            )
+        )
+        .unique("option")
+        .sort("key")["option"]
+        .to_list()
+    )
+    # Path('output/choices_sample.txt').write_text('\n'.join(choices_todo))
+
+
+    def clean_choice_for_tts(choice):
+        # remove bullets
+        choice = re.sub(r"•\s+", "", choice)
+        # remove formatting tags
+        choice = re.sub(r"\{[^\}]+\}", "", choice)
+        # remove prefixes (Explore), (Lie) etc
+        choice = re.sub(r"\([^\)]+\)\s+", "", choice)
+        # remove actions [[Take the blade.]
+        choice = re.sub(r"\[\[[^]]+\]", "", choice)
+        # extract quoted text which is 100% spoken dialogue
+        if quoted_text := re.findall(r"''(.+?)''", choice):
+            return "\n".join(quoted_text)
+
+        return choice if choice else None
+
+
+    [{"a": c, "b": clean_choice_for_tts(c)} for c in choices_todo]
+    return choices_todo, clean_choice_for_tts, random
+
+
+@app.cell
 def _(mo):
     mo.md(
         r"""
@@ -193,16 +325,6 @@ def _(mo):
         """
     )
     return
-
-
-@app.cell
-def _(menu_choices, voice_lines):
-    def merge_dialogue_with_choices(dialogue, choices):
-        return dialogue.sort("key").join(choices.sort("key"), on="key", how="full")
-
-
-    merge_dialogue_with_choices(voice_lines, menu_choices)
-    return (merge_dialogue_with_choices,)
 
 
 @app.cell

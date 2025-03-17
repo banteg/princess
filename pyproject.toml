@@ -8,3 +8,4 @@ dependencies = [
     "polars>=1.25.2",
     "sqlite-utils>=3.38",
 ]
+
