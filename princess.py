@@ -149,10 +149,14 @@ def _(GAME_PATH, Path, pl, re, walk_script_files):
         paths = [Path(path)] if path is not None else walk_script_files()
         menu_re = re.compile(r"(?P<indent>^\s+)menu:")
         option_re = re.compile(r'(?P<indent>^\s+)"(?P<option>[^"]+)"')
+        label_re = re.compile(r"^\s*label ([a-z]\w+):$")
         for path in paths:
             indent = None
             menu_index = 0
+            current_label = None
             for i, line in enumerate(path.read_text().splitlines(), 1):
+                if label_match := label_re.search(line):
+                    current_label = label_match.group(1)
                 if menu := menu_re.search(line):
                     indent = len(menu.group("indent"))
                     menu_index += 1
@@ -162,6 +166,7 @@ def _(GAME_PATH, Path, pl, re, walk_script_files):
                     yield {
                         "path": str(path.relative_to(GAME_PATH)),
                         "lineno": i,
+                        "label": current_label,
                         "menu": menu_index,
                         "option": option.group("option"),
                     }
