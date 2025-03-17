@@ -25,12 +25,18 @@ def _(mo):
 
 
 @app.cell
-def _(Path, re):
+def _(Path, os):
+    GAME_PATH = Path(os.environ["GAME_PATH"])
+    return (GAME_PATH,)
+
+
+@app.cell
+def _(GAME_PATH, Path, re):
     def walk_script_files():
         """
         Iterate over all script files
         """
-        for path in Path("game").rglob("*.rpy"):
+        for path in GAME_PATH.rglob("*.rpy"):
             yield path
 
 
@@ -66,7 +72,7 @@ def _(mo):
 
 
 @app.cell
-def _(Path, extract_characters, pl, re, walk_script_files):
+def _(GAME_PATH, Path, extract_characters, pl, re, walk_script_files):
     def extract_voice_lines(path=None):
         """
         Extract all spoken lines with their corresponding voice file, character, and line.
@@ -93,7 +99,7 @@ def _(Path, extract_characters, pl, re, walk_script_files):
                 if voice_match := voice_regex.search(line):
                     current_indent = voice_match.group("indent")
                     current = {
-                        "path": str(path),
+                        "path": str(path.relative_to(GAME_PATH)),
                         "lineno": i,
                         "label": current_label,
                         "voice": voice_match.group("voice"),
@@ -138,7 +144,7 @@ def _(mo):
 
 
 @app.cell
-def _(Path, pl, re, walk_script_files):
+def _(GAME_PATH, Path, pl, re, walk_script_files):
     def extract_choices(path=None):
         paths = [Path(path)] if path is not None else walk_script_files()
         menu_re = re.compile(r"(?P<indent>^\s+)menu:")
@@ -154,7 +160,7 @@ def _(Path, pl, re, walk_script_files):
                     if indent is None or len(option.group("indent")) != indent + 4:
                         continue
                     yield {
-                        "path": str(path),
+                        "path": str(path.relative_to(GAME_PATH)),
                         "lineno": i,
                         "menu": menu_index,
                         "option": option.group("option"),
@@ -179,7 +185,7 @@ def _(mo):
 
 
 @app.cell
-def _(pl, re, walk_script_files):
+def _(GAME_PATH, pl, re, walk_script_files):
     def find_labels_and_jumps():
         # first collect all labels metadata
         label_re = re.compile(r"^\s*label ([a-z]\w+):$")
@@ -188,7 +194,10 @@ def _(pl, re, walk_script_files):
         for path in walk_script_files():
             for i, line in enumerate(path.read_text().splitlines(), 1):
                 if label := label_re.search(line):
-                    labels[label.group(1)] = {"path": str(path), "lineno": i}
+                    labels[label.group(1)] = {
+                        "path": str(path.relative_to(GAME_PATH)),
+                        "lineno": i,
+                    }
         # now find all jumps and attribute their dest correctly
         jumps = {}
         for path in walk_script_files():
@@ -199,7 +208,7 @@ def _(pl, re, walk_script_files):
                 if jump := jump_re.search(line):
                     label = labels[jump.group(1)]
                     yield {
-                        "src_line": f"{path}:{i}",
+                        "src_line": f"{path.relative_to(GAME_PATH)}:{i}",
                         "dst_line": f"{label['path']}:{label['lineno']}",
                         "src_label": current_label,
                         "dst_label": jump.group(1),
@@ -242,7 +251,8 @@ def _():
     import marimo as mo
     import polars as pl
     import re
-    return Path, defaultdict, mo, nx, pl, re
+    import os
+    return Path, defaultdict, mo, nx, os, pl, re
 
 
 @app.cell
