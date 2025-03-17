@@ -280,10 +280,12 @@ def _(lines_and_choices, pl, re):
 
     choices_todo = (
         lines_and_choices.filter(
-            (pl.col("type") == "menu_choice")
-            & (
-                pl.col("path")
-                == "scripts/paths/stranger/stranger_1/stranger_1_cabin.rpy"
+            (
+                pl.col("type") == "menu_choice"
+                # & (
+                #     pl.col("path")
+                #     == "scripts/paths/stranger/stranger_1/stranger_1_cabin.rpy"
+                # )
             )
         )
         .unique("option")
@@ -294,23 +296,37 @@ def _(lines_and_choices, pl, re):
 
 
     def clean_choice_for_tts(choice):
-        # remove bullets
-        choice = re.sub(r"•\s+", "", choice)
-        # remove formatting tags
-        choice = re.sub(r"\{[^\}]+\}", "", choice)
-        # remove prefixes (Explore), (Lie) etc
-        choice = re.sub(r"\([^\)]+\)\s+", "", choice)
-        # remove actions [[Take the blade.]
-        choice = re.sub(r"\[\[[^]]+\]", "", choice)
-        # extract quoted text which is 100% spoken dialogue
-        if quoted_text := re.findall(r"''(.+?)''", choice):
+        bullet_re = re.compile(r"•\s+")
+        formatting_re = re.compile(r"\{[^\}]+\}")
+        prefixes_re = re.compile(r"\([^\)]+\)\s+")
+        actions_re = re.compile(r"\[\[[^]]+\]")
+        quoted_text_re = re.compile(r"''(.+?)''")
+        special_re = re.compile(
+            r"^(Say|Join|Follow|Return|Make|Continue|Ignore|Investigate|Go|Do|Drop|Tighten|Kneel|Force)\s"
+        )
+        choice = bullet_re.sub("", choice)
+        choice = formatting_re.sub("", choice)
+        choice = prefixes_re.sub("", choice)
+        choice = actions_re.sub("", choice)
+
+        # quoted text is 100% spoken dialogue
+        if quoted_text := quoted_text_re.findall(choice):
             return "\n".join(quoted_text)
 
-        return choice if choice else None
+        # non-verbal lines
+        if special_re.search(choice):
+            return None
+
+        rewrites = {
+            "N-no. I w-won't t-tell you.": "No, I won't tell you.",
+        }
+
+        return rewrites.get(choice, choice) if choice else None
 
 
-    [{"a": c, "b": clean_choice_for_tts(c)} for c in choices_todo]
-    return choices_todo, clean_choice_for_tts, random
+    cleaned_tts = [{"choice": c, "clean": clean_choice_for_tts(c)} for c in choices_todo]
+    pl.DataFrame(cleaned_tts).write_csv("output/hero_lines.csv")
+    return choices_todo, clean_choice_for_tts, cleaned_tts, random
 
 
 @app.cell
@@ -407,7 +423,8 @@ def _():
     import polars as pl
     import re
     import os
-    return Path, defaultdict, mo, nx, os, pl, re
+    import json
+    return Path, defaultdict, json, mo, nx, os, pl, re
 
 
 @app.cell
