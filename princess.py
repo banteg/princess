@@ -98,8 +98,10 @@ def _(GAME_PATH, Path, extract_characters, pl, re, walk_script_files):
                     current_label = label_match.group(1)
                 if voice_match := voice_regex.search(line):
                     current_indent = voice_match.group("indent")
+                    path_clean = str(path.relative_to(GAME_PATH))
                     current = {
-                        "path": str(path.relative_to(GAME_PATH)),
+                        "key": f"{path_clean}:{i:05d}",
+                        "path": path_clean,
                         "lineno": i,
                         "label": current_label,
                         "voice": voice_match.group("voice"),
@@ -163,8 +165,10 @@ def _(GAME_PATH, Path, pl, re, walk_script_files):
                 if option := option_re.search(line):
                     if indent is None or len(option.group("indent")) != indent + 4:
                         continue
+                    path_clean = str(path.relative_to(GAME_PATH))
                     yield {
-                        "path": str(path.relative_to(GAME_PATH)),
+                        "key": f"{path_clean}:{i:05d}",
+                        "path": path_clean,
                         "lineno": i,
                         "label": current_label,
                         "menu": menu_index,
@@ -175,6 +179,30 @@ def _(GAME_PATH, Path, pl, re, walk_script_files):
     menu_choices = pl.DataFrame(extract_choices())
     menu_choices
     return extract_choices, menu_choices
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+        # Context for hero's lines
+
+        merge dialogue and option to create context for audio generation
+
+        13187 lines
+        """
+    )
+    return
+
+
+@app.cell
+def _(menu_choices, voice_lines):
+    def merge_dialogue_with_choices(dialogue, choices):
+        return dialogue.sort("key").join(choices.sort("key"), on="key", how="full")
+
+
+    merge_dialogue_with_choices(voice_lines, menu_choices)
+    return (merge_dialogue_with_choices,)
 
 
 @app.cell
