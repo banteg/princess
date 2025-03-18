@@ -40,7 +40,6 @@ grammar = Lark(
     id: "id" identifier
     identifier: /[a-zA-Z_]\w*/
     quoted: "\"" /[^\"]+/ "\""
-    NEWLINE: /[\r\n]+/
 
     %import common.WS
     %ignore WS
