@@ -302,7 +302,7 @@ def _(lines_and_choices, pl, re):
         actions_re = re.compile(r"\[\[[^]]+\]")
         quoted_text_re = re.compile(r"''(.+?)''")
         special_re = re.compile(
-            r"^(Say|Join|Follow|Return|Make|Continue|Ignore|Investigate|Go|Do|Drop|Tighten|Kneel|Force)\s"
+            r"^(Say|Join|Follow|Play|Return|Make|Continue|Ignore|Embrace|Investigate|Go|Do|Drop|Tighten|Kneel|Force|Try)\s"
         )
         choice = bullet_re.sub("", choice)
         choice = formatting_re.sub("", choice)
@@ -311,7 +311,7 @@ def _(lines_and_choices, pl, re):
 
         # quoted text is 100% spoken dialogue
         if quoted_text := quoted_text_re.findall(choice):
-            return "\n".join(quoted_text)
+            return " ".join(quoted_text)
 
         # non-verbal lines
         if special_re.search(choice):
@@ -324,9 +324,134 @@ def _(lines_and_choices, pl, re):
         return rewrites.get(choice, choice) if choice else None
 
 
-    cleaned_tts = [{"choice": c, "clean": clean_choice_for_tts(c)} for c in choices_todo]
-    pl.DataFrame(cleaned_tts).write_csv("output/hero_lines.csv")
+    cleaned_tts = [
+        {"choice": c, "clean": clean_choice_for_tts(c)} for c in choices_todo
+    ]
+    pl.DataFrame(cleaned_tts).write_parquet("output/hero_lines.parquet")
     return choices_todo, clean_choice_for_tts, cleaned_tts, random
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""# Try different parsing method""")
+    return
+
+
+@app.cell
+def _(Grammar, NodeVisitor):
+    grammar = Grammar(r"""
+    script          = statement+
+    statement       = ws (label / menu / voice / dialogue / jump) ws
+
+    label           = "label" ws identifier ":" statement+
+    menu            = "menu" ":" choice+
+    choice          = ws quoted_text statement+
+
+    voice           = "voice" ws quoted_text ws
+    dialogue        = identifier ws quoted_text ws
+    jump            = "jump" ws identifier ws
+
+    identifier      = ~"[a-zA-Z_][a-zA-Z0-9_]*"
+    quoted_text     = '"' text '"'
+    text            = ~"[^\"\n]+"
+
+    ws              = ~"[ \t\r\n]*"
+    """)
+
+    class DictVisitor(NodeVisitor):
+        def visit_script(self, node, visited_children):
+            return {"script": [stmt for stmt in visited_children if stmt]}
+
+        def visit_statement(self, node, visited_children):
+            _, stmt, _ = visited_children
+            return stmt
+
+        def visit_label(self, node, visited_children):
+            _, _, name, _, statements = visited_children
+            flat_statements = [s for s in statements if isinstance(s, dict)]
+            return {"type": "label", "name": name, "statements": flat(statements)}
+
+        def visit_menu(self, node, visited_children):
+            _, _, choices = visited_children
+            return {"type": "menu", "choices": flat(choices)}
+
+        def visit_choice(self, node, visited_children):
+            _, text, statements = visited_children
+            return {"text": text, "statements": flat(statements)}
+
+        def visit_voice(self, node, visited_children):
+            _, _, path, _ = visited_children
+            return {"type": "voice", "path": path}
+
+        def visit_dialogue(self, node, visited_children):
+            speaker, _, text, _ = visited_children
+            return {"type": "dialogue", "speaker": speaker, "text": text}
+
+        def visit_jump(self, node, visited_children):
+            _, _, target, _ = visited_children
+            return {"type": "jump", "target": target}
+
+        def visit_identifier(self, node, _):
+            return node.text.strip()
+
+        def visit_quoted_text(self, node, visited_children):
+            _, text, _ = visited_children
+            return text
+
+        def visit_text(self, node, _):
+            return node.text.strip()
+
+        def visit_ws(self, node, _):
+            return None
+
+        def generic_visit(self, node, visited_children):
+            # return first dict found, or flattened list if multiple
+            result = []
+            for child in visited_children:
+                if isinstance(child, dict):
+                    result.append(child)
+                elif isinstance(child, list):
+                    result.extend(child)
+            return result or None
+
+    def flat(lst):
+        """Utility function to flatten nested lists"""
+        flat_list = []
+        for item in lst:
+            if isinstance(item, list):
+                flat_list.extend(flat(item))
+            else:
+                flat_list.append(item)
+        return flat_list
+
+    example_script = """
+    label splashscreen:
+        voice "audio/voices/ch1/woods/narrator/script_n_1.flac"
+        n "You're on a path in the woods."
+        menu:
+            "{i}• Why do I need to slay her?{/i}"
+            voice "audio/voices/ch1/woods/narrator/script_n_3.flac"
+            n "I just told you."
+            jump forest_dialogue
+    """
+
+    parsed_tree = grammar.parse(example_script)
+    visitor = DictVisitor()
+    parsed_dict = visitor.visit(parsed_tree)
+
+    import pprint
+
+    pprint.pprint(parsed_dict, width=100)
+    return (
+        DictVisitor,
+        example_script,
+        flat,
+        grammar,
+        parsed_dict,
+        parsed_tree,
+        pprint,
+        visitor,
+    )
 
 
 @app.cell
@@ -424,7 +549,9 @@ def _():
     import re
     import os
     import json
-    return Path, defaultdict, json, mo, nx, os, pl, re
+    from parsimonious.grammar import Grammar
+    from parsimonious.nodes import NodeVisitor
+    return Grammar, NodeVisitor, Path, defaultdict, json, mo, nx, os, pl, re
 
 
 @app.cell
