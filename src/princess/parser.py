@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from lark import Lark
 from princess.constants import CHARACTERS
 
 
@@ -22,3 +23,28 @@ def clean_script(path):
                 yield line
 
     return "\n".join(clean_inner())
+
+
+grammar = Lark(
+    r"""
+    script: statement+
+    statement: label | menu | voice | dialogue
+
+    label: "label" identifier ":" statement+
+    menu: "menu:" choice+
+    choice: quoted condition? ":" statement*
+
+    condition: "if" /[^\n:]+/
+    voice: "voice" quoted
+    dialogue: identifier quoted id?
+
+    id: "id" identifier
+    identifier: /[a-zA-Z_]\w*/
+    quoted: "\"" /[^\"]+/ "\""
+    NEWLINE: /[\r\n]+/
+
+    %import common.WS
+    %ignore WS
+""",
+    start="script",
+)
