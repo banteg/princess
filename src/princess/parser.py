@@ -6,7 +6,6 @@ from princess.constants import CHARACTERS
 
 
 def clean_script(path):
-    # Look for lines starting with a known character name followed by spaces and a double quote.
     character_re = re.compile(r"^\s*(" + "|".join(CHARACTERS) + r")\s+\"")
 
     def clean_inner():
@@ -17,7 +16,7 @@ def clean_script(path):
                 yield line
             elif re.search(r'^\s*"\{i\}•', line):
                 yield line
-            elif re.search(r"^\s*voice\s", line):
+            elif re.search(r'^\s*voice\s"[^"]+"', line):
                 yield line
             elif character_re.search(line):
                 yield line
