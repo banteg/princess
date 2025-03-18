@@ -333,12 +333,18 @@ def _(lines_and_choices, pl, re):
 
 @app.cell
 def _(mo):
-    mo.md(r"""# Try different parsing method""")
+    mo.md(
+        r"""
+        # Extract choice dialogue context with Parismonious
+
+        here we define a .rpy grammar and create a visitor that walks up from choices up to the label to enrich the result with necessary context.
+        """
+    )
     return
 
 
 @app.cell
-def _(Grammar, NodeVisitor):
+def _(Grammar, NodeVisitor, pprint):
     grammar = Grammar(r"""
     script          = statement+
     statement       = ws (label / menu / voice / dialogue / jump) ws
@@ -358,26 +364,52 @@ def _(Grammar, NodeVisitor):
     ws              = ~"[ \t\r\n]*"
     """)
 
-    class DictVisitor(NodeVisitor):
+
+    class ChoiceContextVisitor(NodeVisitor):
+        def __init__(self):
+            self.choices = []
+            self.current_label = None
+            self.current_context = []
+
         def visit_script(self, node, visited_children):
-            return {"script": [stmt for stmt in visited_children if stmt]}
+            # All choices collected during visitation
+            return self.choices
 
         def visit_statement(self, node, visited_children):
             _, stmt, _ = visited_children
             return stmt
 
         def visit_label(self, node, visited_children):
-            _, _, name, _, statements = visited_children
-            flat_statements = [s for s in statements if isinstance(s, dict)]
-            return {"type": "label", "name": name, "statements": flat(statements)}
+            _, _, label_name, _, statements = visited_children
+            self.current_label = label_name
+            self.current_context = []
+
+            for stmt in statements:
+                if isinstance(stmt, dict) and stmt["type"] == "menu":
+                    for choice in stmt["choices"]:
+                        # Save choice with a copy of current context
+                        self.choices.append(
+                            {
+                                "label": self.current_label,
+                                "choice": choice["text"],
+                                "context": self.current_context.copy(),
+                            }
+                        )
+                        # Optionally, handle deeper nested choices here.
+                elif stmt["type"] in ("dialogue", "voice"):
+                    self.current_context.append(stmt)
+            # Reset context when label ends
+            self.current_label = None
+            self.current_context = []
 
         def visit_menu(self, node, visited_children):
             _, _, choices = visited_children
-            return {"type": "menu", "choices": flat(choices)}
+            return {"type": "menu", "choices": choices}
 
         def visit_choice(self, node, visited_children):
             _, text, statements = visited_children
-            return {"text": text, "statements": flat(statements)}
+            # We only need text here; statements handled at label level
+            return {"text": text, "statements": statements}
 
         def visit_voice(self, node, visited_children):
             _, _, path, _ = visited_children
@@ -402,27 +434,18 @@ def _(Grammar, NodeVisitor):
             return node.text.strip()
 
         def visit_ws(self, node, _):
-            return None
+            pass
 
         def generic_visit(self, node, visited_children):
-            # return first dict found, or flattened list if multiple
+            # Properly flatten results
             result = []
             for child in visited_children:
-                if isinstance(child, dict):
-                    result.append(child)
-                elif isinstance(child, list):
+                if isinstance(child, list):
                     result.extend(child)
+                elif isinstance(child, dict):
+                    result.append(child)
             return result or None
 
-    def flat(lst):
-        """Utility function to flatten nested lists"""
-        flat_list = []
-        for item in lst:
-            if isinstance(item, list):
-                flat_list.extend(flat(item))
-            else:
-                flat_list.append(item)
-        return flat_list
 
     example_script = """
     label splashscreen:
@@ -435,23 +458,12 @@ def _(Grammar, NodeVisitor):
             jump forest_dialogue
     """
 
+
     parsed_tree = grammar.parse(example_script)
-    visitor = DictVisitor()
-    parsed_dict = visitor.visit(parsed_tree)
-
-    import pprint
-
-    pprint.pprint(parsed_dict, width=100)
-    return (
-        DictVisitor,
-        example_script,
-        flat,
-        grammar,
-        parsed_dict,
-        parsed_tree,
-        pprint,
-        visitor,
-    )
+    visitor = ChoiceContextVisitor()
+    visitor.visit(parsed_tree)
+    pprint.pprint(visitor.choices, width=120)
+    return ChoiceContextVisitor, example_script, grammar, parsed_tree, visitor
 
 
 @app.cell
@@ -551,7 +563,20 @@ def _():
     import json
     from parsimonious.grammar import Grammar
     from parsimonious.nodes import NodeVisitor
-    return Grammar, NodeVisitor, Path, defaultdict, json, mo, nx, os, pl, re
+    import pprint
+    return (
+        Grammar,
+        NodeVisitor,
+        Path,
+        defaultdict,
+        json,
+        mo,
+        nx,
+        os,
+        pl,
+        pprint,
+        re,
+    )
 
 
 @app.cell
