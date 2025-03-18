@@ -204,6 +204,7 @@ class TTSLabelApp(App):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events."""
         button_id = event.button.id
+        logger.info(f"Button pressed: {button_id}")
 
         if button_id == "play-btn":
             self.action_toggle_play()
@@ -214,7 +215,9 @@ class TTSLabelApp(App):
         elif button_id == "reject-btn":
             self.action_reject()
         elif button_id == "next-btn":
-            self.load_next_file()  # Directly call load_next_file to fix next button
+            logger.info("Next button pressed")
+            self.notify("Next button pressed", title="Next")
+            self.action_next()  # Use action_next instead
 
     def _create_context_line(
         self,
@@ -380,44 +383,53 @@ class TTSLabelApp(App):
 
         if stats["total_files"] > 0:
             progress = (stats["approved"] + stats["rejected"]) / stats["total_files"] * 100
+            approved_percent = stats["approved"] / stats["total_files"] * 100
+            rejected_percent = stats["rejected"] / stats["total_files"] * 100
+            pending_percent = stats["pending"] / stats["total_files"] * 100
         else:
-            progress = 0
+            progress = approved_percent = rejected_percent = pending_percent = 0
 
         # Clear existing stats content
         stats_widget = self.query_one("#stats-display")
         stats_widget.remove_children()
 
-        # Create a nice progress bar with colored stats
-        progress_bar = ProgressBar(total=100, show_percentage=True)
-        progress_bar.update(progress=progress)
-        stats_widget.mount(progress_bar)
-
-        # Create horizontal containers for stats rows
-        row1 = Horizontal(classes="stats-row")
-        row2 = Horizontal(classes="stats-row")
-        stats_widget.mount(row1, row2)
-
-        # Total files
-        total_box = Static(f"Total Files\n{stats['total_files']}", classes="stat-box total")
-
-        # Pending
-        pending_box = Static(f"Pending\n{stats['pending']}", classes="stat-box pending")
-
+        # Create compact progress stats layout
+        main_row = Horizontal(classes="main-stat-row")
+        stats_widget.mount(main_row)
+        
+        # Overall progress
+        overall_label = Static(f"Overall: {stats['approved'] + stats['rejected']}/{stats['total_files']} ({progress:.1f}%)", classes="stat-label")
+        overall_bar = ProgressBar(total=100, show_percentage=False, classes="compact-progress")
+        overall_bar.update(progress=progress)
+        main_row.mount(overall_label)
+        main_row.mount(overall_bar)
+        
+        # Create rows for each stat type
+        approved_row = Horizontal(classes="stat-row")
+        rejected_row = Horizontal(classes="stat-row")
+        pending_row = Horizontal(classes="stat-row")
+        stats_widget.mount(approved_row, rejected_row, pending_row)
+        
         # Approved
-        approved_box = Static(f"Approved\n{stats['approved']}", classes="stat-box approved")
-
-        # Progress percentage
-        progress_box = Static(f"Progress\n{progress:.1f}%", classes="stat-box total")
-
-        # Total choices
-        choices_box = Static(f"Total Choices\n{stats['total_choices']}", classes="stat-box")
-
+        approved_label = Static(f"Approved: {stats['approved']}", classes="stat-label approved")
+        approved_bar = ProgressBar(total=100, show_percentage=False, classes="compact-progress approved-bar")
+        approved_bar.update(progress=approved_percent)
+        approved_row.mount(approved_label)
+        approved_row.mount(approved_bar)
+        
         # Rejected
-        rejected_box = Static(f"Rejected\n{stats['rejected']}", classes="stat-box rejected")
-
-        # Mount the boxes to the rows
-        row1.mount(total_box, pending_box, approved_box)
-        row2.mount(progress_box, choices_box, rejected_box)
+        rejected_label = Static(f"Rejected: {stats['rejected']}", classes="stat-label rejected")
+        rejected_bar = ProgressBar(total=100, show_percentage=False, classes="compact-progress rejected-bar")
+        rejected_bar.update(progress=rejected_percent)
+        rejected_row.mount(rejected_label)
+        rejected_row.mount(rejected_bar)
+        
+        # Pending
+        pending_label = Static(f"Pending: {stats['pending']}", classes="stat-label pending")
+        pending_bar = ProgressBar(total=100, show_percentage=False, classes="compact-progress pending-bar")
+        pending_bar.update(progress=pending_percent)
+        pending_row.mount(pending_label)
+        pending_row.mount(pending_bar)
 
         # Add shortcuts reminder
         shortcuts = Static(
@@ -479,6 +491,8 @@ class TTSLabelApp(App):
     def action_next(self) -> None:
         """Skip to the next file without changing status."""
         # This is now triggered by 't' key
+        logger.info("Next action triggered")
+        self.notify("Loading next file...", title="Next")
         self.load_next_file()
 
     def action_toggle_play(self) -> None:
@@ -823,10 +837,11 @@ class TTSLabelApp(App):
                 self.notify(f"Error during context playback: {str(e)}", title="Playback Error")
 
         # Start playback sequence in a separate thread to avoid blocking UI
+        # Directly passing play_after is not needed since we use nonlocal to capture it
         sequence_thread = threading.Thread(target=play_sequence)
         sequence_thread.daemon = True
         sequence_thread.start()
-        logger.info("Started audio sequence playback thread")
+        logger.info(f"Started audio sequence playback thread (play_after={play_after})")
 
 
 def setup_tts_data(

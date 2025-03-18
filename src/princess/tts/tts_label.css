@@ -45,6 +45,36 @@ Footer {
     background: $primary;
 }
 
+/* Compact stats styles */
+.main-stat-row, .stat-row {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 0;
+}
+
+.stat-label {
+    width: 25%;
+    padding-right: 1;
+}
+
+.compact-progress {
+    width: 1fr;
+    height: 1;
+}
+
+.approved-bar {
+    background: $success;
+}
+
+.rejected-bar {
+    background: $error;
+}
+
+.pending-bar {
+    background: $warning;
+}
+
 .stats-grid {
     grid-size: 3;
     grid-gutter: 1;
