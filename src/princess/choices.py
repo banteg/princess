@@ -1,61 +1,75 @@
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union, Any
 import re
+import networkx as nx
 from pathlib import Path
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Set, Tuple
+from rich import print
 
 
 @dataclass
 class Dialogue:
+    """Represents a single dialogue line from a character."""
+
     character: Optional[str] = None
     text: Optional[str] = None
     voice: Optional[str] = None
+    label: Optional[str] = None
+    node_id: Optional[str] = None
+    indent_level: int = 0
 
     def __str__(self):
-        return f'{self.character}: "{self.text}"'
+        return f'{self.character or "Unknown"}: "{self.text or ""}"' + (
+            f" [voice: {self.voice}]" if self.voice else ""
+        )
 
 
 @dataclass
 class Choice:
+    """Represents a player choice with connections to preceding and following dialogue."""
+
     text: str
-    content: List[Any] = field(default_factory=list)
-
-    def __str__(self):
-        return f'Choice: "{self.text}"'
-
-
-@dataclass
-class Menu:
-    choices: List[Choice] = field(default_factory=list)
-
-    def __str__(self):
-        return f"Menu with {len(self.choices)} choices"
+    condition: Optional[str] = None
+    node_id: Optional[str] = None
+    label_path: List[str] = field(default_factory=list)
+    indent_level: int = 0
 
 
-@dataclass
-class Label:
-    name: str
-    content: List[Any] = field(default_factory=list)
+class RenpyScriptGraph:
+    """Represents the Ren'Py script as a directed graph."""
 
-    def __str__(self):
-        return f"Label: {self.name}"
-
-
-class RenpyParser:
     def __init__(self, characters):
         self.characters = characters
         self.character_re = re.compile(r"^\s*(" + "|".join(characters) + r")\s+\"(.+)\"")
         self.label_re = re.compile(r"^\s*label\s+(\w+):")
         self.menu_re = re.compile(r"^\s*menu:")
-        self.choice_re = re.compile(r'^\s+"\{i\}•\s*(.+?)\{/i\}"')
+        self.choice_re = re.compile(r'^\s+"(\{i\}•\s*.*?\{/i\}|\[\[.*?\]|.*?)"(\s+if\s+(.+?))?:')
         self.voice_re = re.compile(r'^\s*voice\s+"([^"]+)"')
-        self.indent_re = re.compile(r"^(\s*)")
+
+        # Create directed graph to represent the script
+        self.graph = nx.DiGraph()
+
+        # Tracking state
+        self.current_label = None
+        self.label_stack = []
+        self.current_node_id = 0
+        self.choices = []
+        self.current_voice = None
+        self.menu_stack = []
+        self.branch_stack = []
+        self.last_dialogue_node = None
+
+    def get_next_node_id(self):
+        """Generate a unique ID for each node in the graph."""
+        self.current_node_id += 1
+        return f"node_{self.current_node_id}"
 
     def get_indent_level(self, line):
-        match = self.indent_re.match(line)
-        return len(match.group(1)) if match else 0
+        """Calculate indentation level of a line."""
+        return len(line) - len(line.lstrip())
 
     def clean_script(self, path):
-        cleaned_lines = []
+        """Filter relevant lines from the script."""
+        lines = []
         for line in Path(path).read_text().splitlines():
             if (
                 self.label_re.search(line)
@@ -64,148 +78,226 @@ class RenpyParser:
                 or self.voice_re.search(line)
                 or self.character_re.search(line)
             ):
-                cleaned_lines.append(line)
-        return cleaned_lines
+                lines.append(line)
+        return lines
 
     def parse_script(self, path):
+        """Parse the script into a dialogue graph."""
         lines = self.clean_script(path)
-        labels = {}
+        line_indents = [self.get_indent_level(line) for line in lines]
 
         i = 0
         while i < len(lines):
-            if label_match := self.label_re.search(lines[i]):
+            line = lines[i]
+            indent = line_indents[i]
+
+            # Pop branch context when indent decreases
+            while self.branch_stack and indent <= self.branch_stack[-1][1]:
+                self.branch_stack.pop()
+
+            # New label
+            if label_match := self.label_re.search(line):
                 label_name = label_match.group(1)
-                label = Label(name=label_name)
-                labels[label_name] = label
+                self.current_label = label_name
+                self.label_stack = [label_name]
 
-                i, label.content = self.parse_block(lines, i + 1, 0)
-            else:
-                i += 1
+                # Create a label node
+                node_id = self.get_next_node_id()
+                self.graph.add_node(node_id, type="label", label=label_name)
 
-        return labels
+                # Connect to previous dialogue if we have one
+                if self.last_dialogue_node:
+                    self.graph.add_edge(self.last_dialogue_node, node_id)
 
-    def parse_block(self, lines, start_idx, parent_indent):
-        content = []
-        current_dialogue = None
-        i = start_idx
-
-        while i < len(lines):
-            current_indent = self.get_indent_level(lines[i])
-
-            # If we're at a shallower indent than our parent, we're done with this block
-            if current_indent <= parent_indent and i > start_idx:
-                break
-
-            # Check for voice line
-            if voice_match := self.voice_re.search(lines[i]):
-                voice_file = voice_match.group(1)
-                current_dialogue = Dialogue(voice=voice_file)
-                content.append(current_dialogue)
+                self.last_dialogue_node = node_id
                 i += 1
                 continue
 
-            # Check for character dialogue
-            if character_match := self.character_re.search(lines[i]):
+            # Voice line
+            if voice_match := self.voice_re.search(line):
+                self.current_voice = voice_match.group(1)
+                i += 1
+                continue
+
+            # Character dialogue
+            if character_match := self.character_re.search(line):
                 character, text = character_match.group(1), character_match.group(2)
-                if current_dialogue and not current_dialogue.character:
-                    current_dialogue.character = character
-                    current_dialogue.text = text
-                else:
-                    current_dialogue = Dialogue(character=character, text=text)
-                    content.append(current_dialogue)
+
+                # Create dialogue node
+                node_id = self.get_next_node_id()
+                dialogue = Dialogue(
+                    character=character,
+                    text=text,
+                    voice=self.current_voice,
+                    label=self.current_label,
+                    node_id=node_id,
+                    indent_level=indent,
+                )
+
+                self.graph.add_node(node_id, type="dialogue", data=dialogue)
+
+                # Connect to previous dialogue or branch
+                if self.branch_stack:
+                    for branch_id, _ in self.branch_stack:
+                        self.graph.add_edge(branch_id, node_id)
+                elif self.last_dialogue_node:
+                    self.graph.add_edge(self.last_dialogue_node, node_id)
+
+                self.last_dialogue_node = node_id
+                self.current_voice = None
                 i += 1
                 continue
 
-            # Check for menu
-            if self.menu_re.search(lines[i]):
-                menu = Menu()
-                content.append(menu)
-                i, menu.choices = self.parse_menu(lines, i + 1, current_indent)
+            # Menu (choice set)
+            if self.menu_re.search(line):
+                # Create a menu node
+                node_id = self.get_next_node_id()
+                self.graph.add_node(node_id, type="menu")
+
+                # Connect to previous dialogue
+                if self.last_dialogue_node:
+                    self.graph.add_edge(self.last_dialogue_node, node_id)
+
+                # Push menu to stack
+                self.menu_stack.append((node_id, indent))
+                i += 1
                 continue
 
-            i += 1
-
-        return i, content
-
-    def parse_menu(self, lines, start_idx, parent_indent):
-        choices = []
-        i = start_idx
-
-        while i < len(lines):
-            current_indent = self.get_indent_level(lines[i])
-
-            # If we're at a shallower indent than our parent, we're done with this menu
-            if current_indent <= parent_indent:
-                break
-
-            # Check for choice
-            if choice_match := self.choice_re.search(lines[i]):
+            # Choice
+            if choice_match := self.choice_re.search(line):
                 choice_text = choice_match.group(1)
-                choice = Choice(text=choice_text)
-                choices.append(choice)
+                condition = choice_match.group(3) if choice_match.group(2) else None
 
-                # Parse the content of this choice
-                choice_indent = current_indent
+                # Clean choice text
+                choice_text = re.sub(r"\{[^}]+\}", "", choice_text)
+                choice_text = re.sub(r"\[\[|\]\]", "", choice_text)
+
+                # Create choice node
+                node_id = self.get_next_node_id()
+                choice = Choice(
+                    text=choice_text,
+                    condition=condition,
+                    node_id=node_id,
+                    label_path=self.label_stack.copy(),
+                    indent_level=indent,
+                )
+
+                self.graph.add_node(node_id, type="choice", data=choice)
+                self.choices.append(choice)
+
+                # Connect choice to its menu
+                if self.menu_stack:
+                    menu_id, _ = self.menu_stack[-1]
+                    self.graph.add_edge(menu_id, node_id)
+
+                # Add choice to branch stack
+                self.branch_stack.append((node_id, indent))
+
                 i += 1
-                i, choice.content = self.parse_block(lines, i, choice_indent)
                 continue
 
             i += 1
 
-        return i, choices
+        return self.extract_choice_contexts()
+
+    def extract_choice_contexts(self):
+        """Extract the full dialogue context for each choice."""
+        result = []
+
+        for choice in self.choices:
+            # Extract context by navigating backwards in the graph
+            context_before = self.get_context_before(choice.node_id)
+            context_after = self.get_context_after(choice.node_id)
+
+            # Combine contexts and format result
+            result.append(
+                {"choice": choice, "context_before": context_before, "context_after": context_after}
+            )
+
+        return result
+
+    def get_context_before(self, choice_node_id, max_depth=100, visited=None):
+        """Extract dialogue context coming before a choice."""
+        if visited is None:
+            visited = set()
+
+        if max_depth <= 0 or choice_node_id in visited:
+            return []
+
+        visited.add(choice_node_id)
+        context = []
+
+        # Get predecessors in the graph
+        for pred in self.graph.predecessors(choice_node_id):
+            node_data = self.graph.nodes[pred]
+            node_type = node_data.get("type")
+
+            if node_type == "dialogue":
+                # Add dialogue to context
+                context.append(node_data.get("data"))
+
+            # Recursively get context from predecessors
+            pred_context = self.get_context_before(pred, max_depth - 1, visited)
+            context.extend(pred_context)
+
+        return context
+
+    def get_context_after(self, choice_node_id, max_depth=100, visited=None):
+        """Extract dialogue context following a choice."""
+        if visited is None:
+            visited = set()
+
+        if max_depth <= 0 or choice_node_id in visited:
+            return []
+
+        visited.add(choice_node_id)
+        context = []
+
+        # Get successors in the graph
+        for succ in self.graph.successors(choice_node_id):
+            node_data = self.graph.nodes[succ]
+            node_type = node_data.get("type")
+
+            if node_type == "dialogue":
+                # Add dialogue to context
+                context.append(node_data.get("data"))
+
+            # Recursively get context from successors
+            succ_context = self.get_context_after(succ, max_depth - 1, visited)
+            context.extend(succ_context)
+
+        return context
 
 
-def extract_choices_with_full_context(labels):
-    results = []
+def extract_script_structure(script_path, characters):
+    """Process a Ren'Py script and extract its dialogue structure."""
+    parser = RenpyScriptGraph(characters)
+    choice_contexts = parser.parse_script(script_path)
 
-    for label in labels.values():
-        extract_choices_from_block(label.content, [], results, label_path=label.name)
+    # Print formatted results
+    for i, item in enumerate(choice_contexts, 1):
+        choice = item["choice"]
+        label_path = ".".join(choice.label_path)
 
-    return results
+        print(f"\nChoice {i} in {label_path}:")
+        print(f"  Text: {choice.text}")
+        if choice.condition:
+            print(f"  Condition: {choice.condition}")
 
-
-def extract_choices_from_block(block, dialogue_context, results, label_path):
-    for item in block:
-        if isinstance(item, Dialogue):
-            dialogue_context.append(item)
-        elif isinstance(item, Menu):
-            for choice in item.choices:
-                # Create a copy of the dialogue context for this choice
-                choice_context = dialogue_context.copy()
-
-                # Add this choice and its full context to results
-                results.append(
-                    {
-                        "label_path": label_path,
-                        "choice_text": choice.text,
-                        "dialogue_context": choice_context,
-                    }
-                )
-
-                # Recursively process the content of this choice
-                extract_choices_from_block(
-                    choice.content,
-                    dialogue_context + [Dialogue(None, f"CHOICE: {choice.text}")],
-                    results,
-                    label_path,
-                )
-
-
-def main():
-    from princess.constants import CHARACTERS
-
-    parser = RenpyParser(CHARACTERS)
-    labels = parser.parse_script("script.rpy")
-
-    choices_with_context = extract_choices_with_full_context(labels)
-
-    for i, choice_data in enumerate(choices_with_context):
-        print(f"\nChoice {i + 1} in {choice_data['label_path']}:")
-        print(f"  Text: {choice_data['choice_text']}")
-        print("  Dialogue Context:")
-        for dialogue in choice_data["dialogue_context"]:
+        print("  Dialogue Context Before:")
+        for dialogue in sorted(item["context_before"], key=lambda d: d.node_id):
             print(f"    {dialogue}")
+
+        print("  Dialogue Context After (response to this choice):")
+        for dialogue in sorted(item["context_after"], key=lambda d: d.node_id):
+            print(f"    {dialogue}")
+
+    print(f"\nTotal choices extracted: {len(choice_contexts)}")
+    return choice_contexts, parser.graph
 
 
 if __name__ == "__main__":
-    main()
+    from princess.constants import CHARACTERS
+
+    print("=" * 120)
+    extract_script_structure("script.rpy", CHARACTERS)
