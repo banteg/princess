@@ -10,11 +10,11 @@ def clean_script(path):
 
     def clean_inner():
         for line in Path(path).read_text().splitlines():
-            if re.search(r"^\s*label\s[a-z][a-z0-9_]:", line):
+            if re.search(r"^\s*label\s[a-z][a-z0-9_]*:", line):
                 yield line
             elif re.search(r"^\s*menu:", line):
                 yield line
-            elif re.search(r'^\s*"\{i\}•', line):
+            elif re.search(r'^\s*"(\{i\})?•', line):
                 yield line
             elif re.search(r'^\s*voice\s"[^"]+"', line):
                 yield line
