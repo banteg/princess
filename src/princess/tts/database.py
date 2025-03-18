@@ -106,9 +106,10 @@ class TTSDatabase:
             choice_hash = flac_file.stem
             
             # Check if the choice exists
-            choice = self.db["choices"].get(choice_hash)
-            if not choice:
-                print(f"Warning: Found TTS file {flac_file} with no matching choice")
+            try:
+                choice = self.db["choices"].get(choice_hash)
+            except sqlite_utils.db.NotFoundError:
+                print(f"Warning: Found TTS file {flac_file} with no matching choice in database")
                 continue
                 
             # Calculate file hash
@@ -184,8 +185,10 @@ class TTSDatabase:
         choice_hash = file_data["choice_hash"]
         
         # Get the associated choice
-        choice = self.db["choices"].get(choice_hash)
-        if not choice:
+        try:
+            choice = self.db["choices"].get(choice_hash)
+        except sqlite_utils.db.NotFoundError:
+            print(f"Warning: Found TTS file ID {file_data['id']} with no matching choice in database")
             return None
             
         import json
@@ -212,13 +215,16 @@ class TTSDatabase:
         Returns:
             File data including associated choice, or None if not found
         """
-        file_data = self.db["tts_files"].get(file_id)
-        if not file_data:
+        try:
+            file_data = self.db["tts_files"].get(file_id)
+        except sqlite_utils.db.NotFoundError:
             return None
             
         choice_hash = file_data["choice_hash"]
-        choice = self.db["choices"].get(choice_hash)
-        if not choice:
+        try:
+            choice = self.db["choices"].get(choice_hash)
+        except sqlite_utils.db.NotFoundError:
+            print(f"Warning: TTS file ID {file_id} has no matching choice in database")
             return None
             
         import json

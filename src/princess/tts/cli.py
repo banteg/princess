@@ -269,6 +269,7 @@ def setup_tts_data(db_path: str, tts_dir: str, game_path: Optional[Union[str, Pa
         game_path: Optional path to game directory. If None, uses GAME_PATH env variable.
     """
     from princess.tts.extractor import extract_all_choices
+    import os
     
     # Create database
     db = TTSDatabase(db_path)
@@ -282,9 +283,20 @@ def setup_tts_data(db_path: str, tts_dir: str, game_path: Optional[Union[str, Pa
     print("Importing choices to database...")
     db.import_choices(choices)
     
-    # Scan TTS directory
-    print(f"Scanning TTS directory: {tts_dir}")
-    db.scan_tts_directory(tts_dir)
+    # Check if TTS directory exists
+    if not os.path.exists(tts_dir):
+        print(f"\nWarning: TTS directory '{tts_dir}' does not exist. Creating it now.")
+        os.makedirs(tts_dir, exist_ok=True)
+        print(f"Created directory: {tts_dir}")
+        print(f"Note: No TTS files found. You need to generate TTS files and place them in this directory.")
+    else:
+        # Scan TTS directory
+        print(f"Scanning TTS directory: {tts_dir}")
+        # Check if there are any .flac files in the directory
+        flac_files = list(Path(tts_dir).glob("*.flac"))
+        if not flac_files:
+            print(f"No .flac files found in {tts_dir}. You need to generate TTS files first.")
+        db.scan_tts_directory(tts_dir)
     
     # Print stats
     stats = db.get_stats()
@@ -294,6 +306,14 @@ def setup_tts_data(db_path: str, tts_dir: str, game_path: Optional[Union[str, Pa
     print(f"Pending: {stats['pending']}")
     print(f"Approved: {stats['approved']}")
     print(f"Rejected: {stats['rejected']}")
+    
+    if stats['total_files'] == 0:
+        print("\nNo TTS files found in the database. Next steps:")
+        print("1. Export choices with: princess-tts export")
+        print("2. Generate TTS files using the exported JSON")
+        print("3. Place the generated .flac files in the TTS directory")
+        print("4. Run 'princess-tts setup' again to scan the TTS files")
+        print("5. Label the TTS files with: princess-tts label")
 
 
 def main():
@@ -333,8 +353,6 @@ def main():
         export_choices_for_tts(args.output, args.game_path)
     
     elif args.command == "setup":
-        # Create TTS directory if it doesn't exist
-        os.makedirs(args.tts_dir, exist_ok=True)
         setup_tts_data(args.db, args.tts_dir, args.game_path)
     
     elif args.command == "label":
