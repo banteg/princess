@@ -1,7 +1,6 @@
 import re
+import json
 from pathlib import Path
-from parsimonious.grammar import Grammar
-from parsimonious.nodes import NodeVisitor
 
 # List of known characters.
 characters = [
@@ -45,162 +44,175 @@ characters = [
 ]
 
 
-# Updated cleanup function.
-def clean_script(path):
-    # Look for lines starting with a known character name followed by spaces and a double quote.
-    character_re = re.compile(r"^\s*(" + "|".join(characters) + r")\s+\"")
+# Direct approach to parsing Ren'Py script, focusing on extracting choices and their context
+def parse_script(path):
+    # Regex patterns for different script elements
+    character_re = re.compile(r"^\s*(" + "|".join(characters) + r")\s+\"(.+)\"")
+    label_re = re.compile(r"^\s*label\s+(\w+):")
+    menu_re = re.compile(r"^\s*menu:")
+    choice_re = re.compile(r'^\s+\"(.+?)\"')  # Matches indented choices
+    voice_re = re.compile(r'^\s*voice\s+"([^"]+)"')
 
-    def clean_inner():
-        for line in Path(path).read_text().splitlines():
-            if re.search(r"^\s*label\s", line):
-                yield line
-            elif re.search(r"^\s*menu:", line):
-                yield line
-            elif re.search(r'^\s*"\{i\}•', line):
-                yield line
-            elif re.search(r"^\s*voice\s", line):
-                yield line
-            elif character_re.search(line):
-                yield line
-
-    return "\n".join(clean_inner())
-
-
-# Updated grammar to handle dialogue lines as: character ws quoted dialogue.
-renpy_grammar = Grammar(
-    r"""
-    script          = statement*
-    statement       = (dialogue / voice_line / menu / label_line / other) newline*
+    # Data structures
+    dialogues = []        # All dialogue lines
+    menus = []            # Menus with context
+    label_dialogues = {}  # Dialogues organized by label
     
-    # Dialogue: a character name followed by whitespace and a quoted dialogue.
-    dialogue        = character ws quoted_dialogue
-    character       = ~"(?:y|sp|spright|spmid|p|stranger|pmid|wp|swp|n|np|mirror|hero|truth|truthsmall|truthmid|truthside|contrarian|cold|broken|hunted|skeptic|stubborn|smitten|flinching|paranoid|opportunist|cheated|stubcont|parskep|opportunistdragon|herodragon|colddragon|nstub|mound|moundmid|mounds)"
-    # Using a pattern that handles escapes inside the quoted dialogue.
-    quoted_dialogue = "\"" ~r'([^"\\]|\\.)*' "\""
+    # State tracking
+    current_label = None
+    current_menu = None
+    in_menu = False
     
-    # A voice line, e.g., "voice some_voice_file"
-    voice_line      = "voice" ws voice_text
-    voice_text      = ~".+"
-    
-    # A menu block.
-    menu            = "menu:" ws newline menu_item+
-    menu_item       = indent choice_line
-    choice_line     = choice_text ":" ws newline (block)?
-    choice_text     = "\"" ~r'[^"\n]+' "\""
-    block           = (indent block_line newline)+
-    block_line      = ~".+"
-    
-    # A label line, e.g., "label start:"
-    label_line      = ~"^\s*label\s.+"
-    
-    # Catch-all for other lines.
-    other           = ~".*"
-    
-    indent          = "    "
-    ws              = ~"[ \t]+"
-    newline         = "\n"
-    """
-)
-
-
-# Visitor to extract:
-# 1. Dialogue lines (with an attached voice line if immediately following)
-# 2. Menus paired with the dialogue context (accumulated since the last label).
-class RenpyVisitor(NodeVisitor):
-    def __init__(self):
-        self.current_context = []  # Holds dialogue entries since last label.
-        self.dialogues = []  # List of all dialogues.
-        self.menus = []  # List of menus with context.
-        super().__init__()
-
-    def visit_script(self, node, visited_children):
-        return {
-            "dialogues": self.dialogues,
-            "menus": self.menus,
-        }
-
-    def visit_dialogue(self, node, visited_children):
-        # Structure: [character, ws, quoted_dialogue]
-        char = visited_children[0].text.strip()
-        dialogue_raw = visited_children[2].text.strip()
-        # Remove the surrounding quotes.
-        dialogue_text = (
-            dialogue_raw[1:-1]
-            if dialogue_raw.startswith('"') and dialogue_raw.endswith('"')
-            else dialogue_raw
-        )
-        entry = {"character": char, "text": dialogue_text, "voice": None}
-        self.current_context.append(entry)
-        self.dialogues.append(entry)
-        return entry
-
-    def visit_voice_line(self, node, visited_children):
-        # Structure: ["voice", ws, voice_text]
-        voice_txt = visited_children[2].text.strip()
-        if self.current_context and self.current_context[-1]["voice"] is None:
-            self.current_context[-1]["voice"] = voice_txt
-        return voice_txt
-
-    def visit_label_line(self, node, visited_children):
-        # Reset context at a label boundary.
-        self.current_context = []
-        return node.text.strip()
-
-    def visit_menu(self, node, visited_children):
-        menu_data = self.extract_menu_choices(node)
-        # Capture the dialogue context preceding this menu.
-        self.menus.append(
-            {
-                "context": self.current_context.copy(),
-                "menu": menu_data,
+    # First pass: gather all dialogues and organize by label
+    for line_num, line in enumerate(Path(path).read_text().splitlines(), 1):
+        # Track labels
+        if label_match := label_re.search(line):
+            current_label = label_match.group(1)
+            # Initialize dialogues array for this label if needed
+            if current_label not in label_dialogues:
+                label_dialogues[current_label] = []
+            in_menu = False
+            continue
+        
+        # Track menu sections
+        if menu_re.search(line):
+            in_menu = True
+            current_menu = {
+                "label": current_label,
+                "context": [],  # Will be filled later
+                "choices": []
             }
-        )
-        return menu_data
-
-    def extract_menu_choices(self, menu_node):
-        choices = []
-        for child in menu_node.children:
-            if hasattr(child, "expr_name") and child.expr_name == "menu_item":
-                choice = self.extract_choice(child)
-                if choice:
-                    choices.append(choice)
-        return choices
-
-    def extract_choice(self, menu_item_node):
-        for child in menu_item_node.children:
-            if hasattr(child, "expr_name") and child.expr_name == "choice_line":
-                choice_text = None
-                block_text = None
-                for subchild in child.children:
-                    if hasattr(subchild, "expr_name"):
-                        if subchild.expr_name == "choice_text":
-                            choice_text = subchild.text.strip().strip('"')
-                        elif subchild.expr_name == "block":
-                            block_text = subchild.text.strip()
-                return {"choice": choice_text, "block": block_text}
-        return None
-
-    def visit_other(self, node, visited_children):
-        return None
-
-    def generic_visit(self, node, visited_children):
-        return visited_children or node
+            menus.append(current_menu)
+            continue
+        
+        # Process choices
+        if in_menu and (choice_match := choice_re.search(line)):
+            choice_text = choice_match.group(1)
+            # Clean up Ren'Py formatting tags
+            choice_text = re.sub(r'\{[^}]+\}', '', choice_text)
+            if "•" in choice_text:
+                choice_text = choice_text.replace("• ", "")
+            
+            current_menu["choices"].append({
+                "choice": choice_text,
+                "line": line_num
+            })
+            continue
+        
+        # Voice lines belong to the previous dialogue
+        if voice_match := voice_re.search(line):
+            voice_path = voice_match.group(1)
+            # Find the most recent dialogue without a voice
+            if dialogues and dialogues[-1]["voice"] is None:
+                dialogues[-1]["voice"] = voice_path
+                
+                # Also update in label_dialogues
+                if current_label in label_dialogues and label_dialogues[current_label]:
+                    for d in reversed(label_dialogues[current_label]):
+                        if d["voice"] is None:
+                            d["voice"] = voice_path
+                            break
+            continue
+        
+        # Process dialogue lines
+        if dialogue_match := character_re.search(line):
+            char = dialogue_match.group(1)
+            dialogue_text = dialogue_match.group(2).strip()
+            
+            # Clean up the text
+            dialogue_text = dialogue_text.replace(r'\n', '')  # Remove newline escapes
+            dialogue_text = re.sub(r'\{[^}]+\}', '', dialogue_text)  # Remove formatting tags
+            
+            # Create the dialogue entry
+            entry = {
+                "character": char,
+                "text": dialogue_text,
+                "voice": None,
+                "label": current_label,
+                "line": line_num
+            }
+            
+            # Add to both overall dialogues and label-specific dialogues
+            dialogues.append(entry)
+            if current_label in label_dialogues:
+                label_dialogues[current_label].append(entry)
+    
+    # Second pass: Populate context for each menu by traversing label dependencies
+    for menu in menus:
+        if menu["label"] in label_dialogues:
+            # Add all dialogues from the current label
+            menu["context"] = label_dialogues[menu["label"]].copy()
+            
+            # Merge voice and text in context dialogues for user convenience 
+            merged_context = []
+            for entry in menu["context"]:
+                merged_entry = {
+                    "character": entry["character"],
+                    "text": entry["text"],
+                    "voice": entry["voice"],
+                    "line": entry["line"]
+                }
+                merged_context.append(merged_entry)
+            
+            menu["merged_context"] = merged_context
+    
+    # Create a final output structure with all extracted information
+    return {
+        "dialogues": dialogues,
+        "menus": menus,
+        "label_dialogues": label_dialogues  # Include for debugging
+    }
 
 
 # Example usage:
 if __name__ == "__main__":
     import pprint
 
-    # Clean the script file.
-    script_clean = clean_script("script.rpy")
-    # Optionally, write out the cleaned script.
-    Path("script_clean.rpy").write_text(script_clean)
-
-    # Parse the cleaned script.
-    tree = renpy_grammar.parse(script_clean)
-
-    # Visit the parse tree.
-    visitor = RenpyVisitor()
-    result = visitor.visit(tree)
-
-    pprint.pprint(result)
+    print("Parsing Ren'Py script file...")
+    result = parse_script("script.rpy")
+    
+    # Print results summary
+    print(f"\nExtracted {len(result['dialogues'])} dialogue lines")
+    print(f"Extracted {len(result['menus'])} menu choices with context")
+    
+    # Print sample of the first menu with context
+    if result['menus']:
+        print("\nSample menu with context:")
+        menu = result['menus'][0]
+        print(f"Label: {menu.get('label', 'Unknown')}")
+        print(f"Context length: {len(menu['context'])} dialogue entries")
+        print(f"Choices: {len(menu.get('choices', []))} options")
+        
+        # Show first few dialogue entries from context
+        if menu['context']:
+            print("\nContext sample (up to 3 entries):")
+            for i, entry in enumerate(menu['context'][:3]):
+                print(f"  {i+1}. {entry['character']}: {entry['text'][:50]}...")
+                if entry['voice']:
+                    print(f"     Voice: {entry['voice']}")
+        
+        # Show first few choices
+        if menu.get('choices', []):
+            print("\nChoices sample (up to 3):")
+            for i, choice in enumerate(menu.get('choices', [])[:3]):
+                print(f"  {i+1}. {choice.get('choice', '')[:50]}...")
+                
+        # Show merged context and choices for the menu
+        if 'merged_context' in menu:
+            print("\nMerged context and choices example:")
+            merged_data = {
+                "label": menu["label"],
+                "context": [f"{e['character']}: {e['text'][:30]}..." for e in menu["merged_context"][:2]],
+                "choices": [c["choice"][:30] + "..." for c in menu["choices"][:2]]
+            }
+            pprint.pprint(merged_data, width=100)
+    
+    # Write full results to files for inspection
+    with open('parser_output.txt', 'w') as f:
+        pprint.pprint(result, f, width=120)
+    
+    # Also save as JSON for easier programmatic access
+    with open('parser_output.json', 'w') as f:
+        json.dump(result, f, indent=2)
+        
+    print("\nFull output written to parser_output.txt and parser_output.json")
