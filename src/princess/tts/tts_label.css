@@ -1,0 +1,91 @@
+/* TTS Label App CSS */
+
+Screen {
+    background: #111111;
+    color: #f0f0f0;
+}
+
+Header {
+    background: #000000;
+    color: #00ff99;
+    dock: top;
+}
+
+Footer {
+    background: #000000;
+    color: #00ff99;
+    dock: bottom;
+}
+
+#main {
+    width: 100%;
+    height: 100%;
+    padding: 1 2;
+}
+
+.section-title {
+    background: #222222;
+    color: #00ff99;
+    text-align: center;
+    width: 100%;
+    margin-bottom: 1;
+    padding: 0 1;
+    border: tall #444444;
+}
+
+.subsection-title {
+    color: #00ccff;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+
+#stats-section {
+    margin-bottom: 2;
+}
+
+#file-section {
+    margin-bottom: 2;
+}
+
+#choice-section {
+    margin-bottom: 2;
+}
+
+#context-section {
+    margin-bottom: 2;
+}
+
+#choice-text {
+    color: #ff00cc;
+    background: #222222;
+    border: solid #444444;
+    margin: 1 0;
+    padding: 1 2;
+}
+
+#clean-tts-text {
+    color: #ff6600;
+    background: #222222;
+    border: solid #444444;
+    margin: 1 0;
+    padding: 1 2;
+}
+
+#context-before, #context-after {
+    background: #222222;
+    border: solid #444444;
+    margin: 1 0;
+    padding: 1 2;
+}
+
+#controls-section {
+    margin-top: 2;
+    height: auto;
+    align: center middle;
+}
+
+Button {
+    margin: 0 1;
+    min-width: 12;
+    border: round #666666;
+}

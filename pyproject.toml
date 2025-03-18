@@ -13,9 +13,11 @@ dependencies = [
     "networkx>=3.4.2",
     "parsimonious>=0.10.0",
     "polars>=1.25.2",
+    "pydot>=3.0.4",
     "rich>=13.9.4",
     "ruff>=0.11.0",
     "sqlite-utils>=3.38",
+    "textual>=0.52.1",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +34,9 @@ packages = ["src/princess"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[project.scripts]
+princess-tts = "princess.tts.cli:main"
 
 [tool.ruff]
 line-length = 100
