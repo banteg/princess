@@ -1,19 +1,19 @@
 /* TTS Label App CSS */
 
 Screen {
-    background: #111111;
-    color: #f0f0f0;
+    background: #202020;
+    color: #e0e0e0;
 }
 
 Header {
-    background: #000000;
-    color: #00ff99;
+    background: #333333;
+    color: #ffffff;
     dock: top;
 }
 
 Footer {
-    background: #000000;
-    color: #00ff99;
+    background: #333333;
+    color: #ffffff;
     dock: bottom;
 }
 
@@ -23,65 +23,114 @@ Footer {
     padding: 1 2;
 }
 
-.section-title {
-    background: #222222;
-    color: #00ff99;
-    text-align: center;
+#stats-display {
+    height: auto;
+    margin-bottom: 1;
+    border: solid $accent;
+    background: $surface;
+    color: $text;
+    padding: 1;
+}
+
+#progress-container {
     width: 100%;
-    margin-bottom: 1;
+    height: 1;
+    background: $primary-background-darken-3;
+    color: $text;
+}
+
+#progress-bar {
+    width: 0%;
+    height: 1;
+    background: $primary;
+}
+
+.stats-grid {
+    grid-size: 3;
+    grid-gutter: 1;
+    grid-rows: 2;
     padding: 0 1;
-    border: tall #444444;
 }
 
-.subsection-title {
-    color: #00ccff;
-    margin-top: 1;
+.stat-box {
+    height: 3;
+    padding: 1;
+    border: solid $surface-darken-1;
+    text-align: center;
+}
+
+.stat-value {
+    text-style: bold;
+}
+
+.pending {
+    color: $warning;
+    border-left: thick $warning;
+    background: $warning-darken-3;
+}
+
+.approved {
+    color: $success;
+    border-left: thick $success;
+    background: $success-darken-3;
+}
+
+.rejected {
+    color: $error;
+    border-left: thick $error;
+    background: $error-darken-3;
+}
+
+.total {
+    color: $primary;
+    border-left: thick $primary;
+    background: $primary-darken-3;
+}
+
+.shortcuts {
+    color: $text;
+    background: $surface-darken-1;
+    border-top: solid $surface-darken-2;
+    text-align: center;
+    padding: 1;
+}
+
+#content-section {
+    height: 1fr;
     margin-bottom: 1;
+    width: 100%;
+    border: solid #555555;
+    padding: 1;
+    background: #252525;
 }
 
-#stats-section {
-    margin-bottom: 2;
+#content-display {
+    height: 1fr;
+    width: 100%;
+    overflow: auto;
+    padding: 0 1;
 }
 
-#file-section {
-    margin-bottom: 2;
-}
-
-#choice-section {
-    margin-bottom: 2;
-}
-
-#context-section {
-    margin-bottom: 2;
-}
-
-#choice-text {
-    color: #ff00cc;
-    background: #222222;
-    border: solid #444444;
+.choice-highlight {
+    background: $primary-background-darken-1;
+    border: heavy $primary;
+    padding: 1;
     margin: 1 0;
-    padding: 1 2;
 }
 
-#clean-tts-text {
-    color: #ff6600;
-    background: #222222;
-    border: solid #444444;
+.stats-row {
+    width: 100%;
+    height: auto;
+    align: center middle;
     margin: 1 0;
-    padding: 1 2;
-}
-
-#context-before, #context-after {
-    background: #222222;
-    border: solid #444444;
-    margin: 1 0;
-    padding: 1 2;
 }
 
 #controls-section {
-    margin-top: 2;
     height: auto;
     align: center middle;
+    padding: 1;
+    border: solid #555555;
+    background: #333333;
 }
 
 Button {
