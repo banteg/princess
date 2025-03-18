@@ -111,7 +111,7 @@ def extract_choices_from_file(script_path: str) -> List[Dict[str, Any]]:
         # Add to the enriched choices
         enriched_choices.append({
             "filename": os.path.basename(script_path),
-            "lineno": -1,  # Placeholder
+            "lineno": choice.line_number,  # Use the actual line number from the choice
             "current_label": current_label,
             "choice_text": choice_text,
             "clean_tts_text": clean_tts_text,

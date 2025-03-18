@@ -160,7 +160,12 @@ class TTSLabelApp(App):
             return
             
         # Update file info
-        file_info = f"ID: {file['id']}\nFile: {file['file_path']}\nStatus: {file['status']}\n"
+        file_info = (
+            f"ID: {file['id']}\n"
+            f"File: {file['file_path']}\n"
+            f"Status: {file['status']}\n"
+            f"Source: {file['filename']}:{file['lineno']}\n"
+        )
         self.query_one("#file-info").update(file_info)
         
         # Update choice text

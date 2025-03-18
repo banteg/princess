@@ -29,6 +29,7 @@ class TTSDatabase:
                 "choice_text": str,           # Original choice text
                 "clean_tts_text": str,        # Cleaned text for TTS
                 "filename": str,              # Source filename
+                "lineno": int,                # Line number in the source file
                 "current_label": str,         # Label in the game script
                 "context_before": str,        # JSON string of context before
                 "context_after": str,         # JSON string of context after
@@ -74,6 +75,7 @@ class TTSDatabase:
                 "choice_text": choice["choice_text"],
                 "clean_tts_text": choice["clean_tts_text"],
                 "filename": choice["filename"],
+                "lineno": choice["lineno"],
                 "current_label": choice["current_label"] or "",
                 "context_before": json.dumps(choice["context_before"]),
                 "context_after": json.dumps(choice["context_after"]),
@@ -193,6 +195,7 @@ class TTSDatabase:
             "choice_text": choice["choice_text"],
             "clean_tts_text": choice["clean_tts_text"],
             "filename": choice["filename"],
+            "lineno": choice["lineno"],
             "current_label": choice["current_label"],
             "context_before": json.loads(choice["context_before"]),
             "context_after": json.loads(choice["context_after"]),
@@ -225,6 +228,7 @@ class TTSDatabase:
             "choice_text": choice["choice_text"],
             "clean_tts_text": choice["clean_tts_text"],
             "filename": choice["filename"],
+            "lineno": choice["lineno"],
             "current_label": choice["current_label"],
             "context_before": json.loads(choice["context_before"]),
             "context_after": json.loads(choice["context_after"]),

@@ -3,7 +3,7 @@ import json
 import networkx as nx
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Optional
 from rich import print
 
 
@@ -33,6 +33,7 @@ class Choice:
     node_id: Optional[str] = None
     label_path: List[str] = field(default_factory=list)
     indent_level: int = 0
+    line_number: int = -1
 
 
 class RenpyScriptGraph:
@@ -69,9 +70,16 @@ class RenpyScriptGraph:
         return len(line) - len(line.lstrip())
 
     def clean_script(self, path):
-        """Filter relevant lines from the script."""
+        """Filter relevant lines from the script and track their original line numbers.
+        
+        Returns:
+            Tuple of (lines, line_numbers) where line_numbers contains the original
+            line number in the source file for each filtered line.
+        """
         lines = []
-        for line in Path(path).read_text().splitlines():
+        line_numbers = []
+        
+        for i, line in enumerate(Path(path).read_text().splitlines(), 1):
             if (
                 self.label_re.search(line)
                 or self.menu_re.search(line)
@@ -80,17 +88,20 @@ class RenpyScriptGraph:
                 or self.character_re.search(line)
             ):
                 lines.append(line)
-        return lines
+                line_numbers.append(i)
+                
+        return lines, line_numbers
 
     def parse_script(self, path):
         """Parse the script into a dialogue graph."""
-        lines = self.clean_script(path)
+        lines, line_numbers = self.clean_script(path)
         line_indents = [self.get_indent_level(line) for line in lines]
 
         i = 0
         while i < len(lines):
             line = lines[i]
             indent = line_indents[i]
+            original_line_number = line_numbers[i]
 
             # Pop branch context when indent decreases
             while self.branch_stack and indent <= self.branch_stack[-1][1]:
@@ -177,6 +188,7 @@ class RenpyScriptGraph:
                     node_id=node_id,
                     label_path=self.label_stack.copy(),
                     indent_level=indent,
+                    line_number=original_line_number,
                 )
 
                 self.graph.add_node(node_id, type="choice", data=choice)
@@ -288,7 +300,6 @@ def export_to_specific_json(choice_contexts, script_path, output_path):
         ...
     ]
     """
-    import json
     import os
 
     # Extract just the filename from the path
@@ -356,7 +367,7 @@ def export_to_specific_json(choice_contexts, script_path, output_path):
         result.append(
             {
                 "filename": filename,
-                "lineno": -1,  # Placeholder since we don't track line numbers in the current implementation
+                "lineno": choice.line_number,  # Use the actual line number from the choice
                 "current_label": current_label,
                 "choice_text": choice.text,
                 "context_before": formatted_context_before,
