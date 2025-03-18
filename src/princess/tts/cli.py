@@ -193,6 +193,7 @@ class TTSLabelApp(App):
                 yield Button("Approve (y)", id="approve-btn", variant="success")
                 yield Button("Reject (n)", id="reject-btn", variant="error")
                 yield Button("Next (t)", id="next-btn", variant="default")
+                yield Button("Quit (q)", id="quit-btn", variant="default")
 
         yield Footer()
 
@@ -201,17 +202,28 @@ class TTSLabelApp(App):
         button_id = event.button.id
         logger.info(f"Button pressed: {button_id}")
 
+        # Stop any playing audio when any button is pressed
+        self.audio_player.stop()
+
         if button_id == "play-btn":
+            logger.info("Play button pressed")
             self.action_toggle_play()
         elif button_id == "context-btn":
+            logger.info("Context button pressed")
             self.action_play_context_choice()
         elif button_id == "approve-btn":
+            logger.info("Approve button pressed")
             self.action_approve()
         elif button_id == "reject-btn":
+            logger.info("Reject button pressed")
             self.action_reject()
         elif button_id == "next-btn":
-            logger.info("Next button pressed")
-            self.action_next()  # Use action_next instead
+            logger.info("Next button pressed - calling load_next_file directly")
+            # Use load_next_file directly instead of action_next
+            self.load_next_file()
+        elif button_id == "quit-btn":
+            logger.info("Quit button pressed")
+            self.action_quit()
 
     def _create_context_line(
         self,
@@ -441,6 +453,10 @@ class TTSLabelApp(App):
     def load_next_file(self) -> None:
         """Load the next pending file for review."""
         logger.info("Loading next file...")
+        
+        # Stop any playing audio instantly
+        self.audio_player.stop()
+        
         next_file = self.db.get_next_pending_file()
         
         if next_file:
