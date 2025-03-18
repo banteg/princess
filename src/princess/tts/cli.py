@@ -1,6 +1,7 @@
 """CLI tool for labeling TTS generated from choices."""
 
 import os
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Union
 
@@ -12,16 +13,42 @@ from textual.reactive import reactive
 
 from princess.tts.database import TTSDatabase
 
+# Set up logging to file and console
+log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tts_debug.log")
+
+# Create logger
+logger = logging.getLogger("tts_app")
+logger.setLevel(logging.INFO)
+logger.propagate = False  # Don't propagate to root logger
+
+# File handler for debug log
+file_handler = logging.FileHandler(log_file)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+# Console handler for terminal output
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter('%(message)s'))
+
+# Add handlers to logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
 
 class AudioPlayer:
-    """Simple audio player for FLAC files."""
+    """Non-blocking audio player for various audio formats."""
 
     def __init__(self):
         """Initialize the audio player."""
         self.current_process = None
+        # Flag to ensure we're not waiting on a process
+        self.is_playing = False
+        import threading
+        self._playback_thread = None
 
     def play(self, file_path: str) -> None:
-        """Play an audio file.
+        """Play an audio file asynchronously.
 
         Args:
             file_path: Path to the audio file
@@ -29,41 +56,81 @@ class AudioPlayer:
         import subprocess
         import platform
         import os
+        import pathlib
+        import threading
 
         # Check if file exists
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Audio file not found: {file_path}")
+            error_msg = f"Audio file not found: {file_path}"
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
 
         # Stop any currently playing audio
         self.stop()
 
-        # Choose the appropriate command based on platform
+        # Get file extension
+        file_ext = pathlib.Path(file_path).suffix.lower()
+        
+        # Choose the appropriate command based on platform and file type
         system = platform.system()
         if system == "Darwin":  # macOS
+            # afplay works for various audio formats on macOS
             cmd = ["afplay", file_path]
         elif system == "Linux":
-            cmd = ["aplay", file_path]
+            # Choose player based on file extension
+            if file_ext in ['.wav', '.flac']:
+                cmd = ["aplay", file_path]
+            elif file_ext in ['.mp3', '.ogg']:
+                cmd = ["mpg123", file_path]
+            else:
+                # Fallback to aplay
+                cmd = ["aplay", file_path]
         elif system == "Windows":
-            cmd = ["powershell", "-c", f"(New-Object Media.SoundPlayer '{file_path}').PlaySync();"]
+            # Use START to launch a non-blocking process on Windows
+            cmd = ["powershell", "-c", f"(New-Object Media.SoundPlayer '{file_path}').Play();"]
         else:
             raise RuntimeError(f"Unsupported platform: {system}")
 
-        # Start the process
-        print(f"Playing audio file: {file_path}")
-        try:
-            self.current_process = subprocess.Popen(cmd)
-        except Exception as e:
-            print(f"Error playing audio: {str(e)}")
-            raise
+        # Debug information
+        file_exists = os.path.exists(file_path)
+        file_size = os.path.getsize(file_path) if file_exists else 0
+        logger.info(f"Playing audio file: {file_path}")
+        logger.info(f"File exists: {file_exists}, File size: {file_size} bytes")
+        logger.info(f"Command: {' '.join(cmd)}")
+        
+        # Start the process in a separate thread to avoid blocking the UI
+        def _play_in_thread():
+            try:
+                self.is_playing = True
+                self.current_process = subprocess.Popen(cmd)
+                logger.info(f"Started playback process for {file_path}")
+                # Wait for process to complete but don't block the app
+                return_code = self.current_process.wait()
+                self.is_playing = False
+                logger.info(f"Playback of {os.path.basename(file_path)} completed with return code {return_code}")
+            except Exception as e:
+                logger.error(f"Error playing audio: {str(e)}")
+                logger.error(f"Command attempted: {' '.join(cmd)}")
+                # Check if the file has the right extension but wrong format
+                if file_exists and file_size > 0:
+                    logger.error(f"File exists but might have wrong format. File extension: {file_ext}")
+                self.is_playing = False
+        
+        # Create and start a new thread
+        self._playback_thread = threading.Thread(target=_play_in_thread)
+        self._playback_thread.daemon = True  # Thread will die when app exits
+        self._playback_thread.start()
+        logger.info(f"Started playback thread for {os.path.basename(file_path)}")
 
     def stop(self) -> None:
         """Stop the currently playing audio."""
         if self.current_process and self.current_process.poll() is None:
             try:
                 self.current_process.terminate()
-                print("Stopped audio playback")
+                logger.info("Stopped audio playback")
+                self.is_playing = False
             except Exception as e:
-                print(f"Error stopping audio: {str(e)}")
+                logger.error(f"Error stopping audio: {str(e)}")
             finally:
                 self.current_process = None
 
@@ -144,6 +211,63 @@ class TTSLabelApp(App):
         elif button_id == "next-btn":
             self.action_next()
 
+    def _create_context_line(self, character: str, text: Union[str, Dict[str, Any]], filename: str, lineno: int, voice_path: Optional[str] = None) -> Static:
+        """Create a styled context line widget.
+        
+        Args:
+            character: Character name
+            text: Line text or context dictionary
+            filename: Script filename 
+            lineno: Line number
+            voice_path: Optional path to voice file
+            
+        Returns:
+            A Static widget with the context line
+        """
+        from textual.widgets import Static
+        
+        # Create main content
+        content_parts = []
+        
+        # Extract the actual text display
+        display_text = text["text"] if isinstance(text, dict) else text
+        content_parts.append(f"{character}: {display_text}")
+        
+        # Try to get voice path from the context
+        direct_voice = None
+        if isinstance(text, dict) and "voice" in text and text["voice"]:
+            direct_voice = text["voice"]
+            logger.info(f"Found voice path in context data: {direct_voice}")
+            # If voice path is relative, make it absolute
+            if not os.path.isabs(direct_voice):
+                absolute_path = os.path.join(self.game_path, direct_voice)
+                if os.path.exists(absolute_path):
+                    direct_voice = absolute_path
+                    logger.info(f"Using absolute voice path: {direct_voice}")
+                else:
+                    logger.warning(f"Voice file doesn't exist at expected path: {absolute_path}")
+        
+        # Add voice file info
+        if direct_voice and os.path.exists(direct_voice):
+            # Use the direct voice path from context
+            audio_file = os.path.basename(direct_voice)
+            content_parts.append(f"Voice: [dim]{audio_file}[/dim]")
+            logger.info(f"Using direct voice file: {direct_voice}")
+        elif voice_path and os.path.exists(voice_path):
+            # Use the found voice path
+            audio_file = os.path.basename(voice_path)
+            content_parts.append(f"Voice: [dim]{audio_file}[/dim]")
+            logger.info(f"Using found voice file: {voice_path}")
+        
+        # Join parts with newlines
+        content = "\n".join(content_parts)
+        
+        # Direct output for debugging
+        logger.info(f"Context line content: {content}")
+            
+        # Return a static widget with the content and appropriate classes
+        return Static(content, classes="context-line")
+    
     def watch_current_file(self, file: Optional[Dict[str, Any]]) -> None:
         """Update the UI when the current file changes."""
         if file is None:
@@ -178,16 +302,20 @@ class TTSLabelApp(App):
             content_display.mount(context_before)
 
             for ctx in file["context_before"]:
-                # For context lines, add file paths for voice files
-                ctx_text = f"{ctx['character']}: {ctx['text']}"
-
+                # Try to find the voice file path
+                voice_path = None
                 if "lineno" in ctx:
-                    # Try to find the voice file path
                     voice_path = self._find_game_voice_file(file["filename"], ctx.get("lineno", 0))
-                    if voice_path:
-                        ctx_text += f"\nVoice: {voice_path}"
-
-                ctx_static = Static(ctx_text)
+                
+                # Create a styled context line with the voice file path
+                # Pass the whole context object to handle 'voice' paths directly
+                ctx_static = self._create_context_line(
+                    character=ctx['character'],
+                    text=ctx,  # Pass the whole context object
+                    filename=file["filename"],
+                    lineno=ctx.get("lineno", 0),
+                    voice_path=voice_path
+                )
                 content_display.mount(ctx_static)
 
             content_display.mount(Static(""))
@@ -207,16 +335,20 @@ class TTSLabelApp(App):
             content_display.mount(context_after)
 
             for ctx in file["context_after"]:
-                # For context lines, add file paths for voice files
-                ctx_text = f"{ctx['character']}: {ctx['text']}"
-
+                # Try to find the voice file path
+                voice_path = None
                 if "lineno" in ctx:
-                    # Try to find the voice file path
                     voice_path = self._find_game_voice_file(file["filename"], ctx.get("lineno", 0))
-                    if voice_path:
-                        ctx_text += f"\nVoice: {voice_path}"
-
-                ctx_static = Static(ctx_text)
+                
+                # Create a styled context line with the voice file path
+                # Pass the whole context object to handle 'voice' paths directly
+                ctx_static = self._create_context_line(
+                    character=ctx['character'],
+                    text=ctx,  # Pass the whole context object
+                    filename=file["filename"],
+                    lineno=ctx.get("lineno", 0),
+                    voice_path=voice_path
+                )
                 content_display.mount(ctx_static)
 
             content_display.mount(Static(""))
@@ -359,33 +491,95 @@ class TTSLabelApp(App):
             Path to the voice file if found, None otherwise
         """
         import glob
-
+        
         if not self.game_path:
+            logger.info("Game path not set, can't search for voice files")
             return None
-
-        # Example path pattern: audio/voices/ch1/empty/princess/empty_p_20.flac
-        # Try finding it based on common patterns in the game
-        script_name = Path(filename).stem  # Get script name without extension
-
-        # Try various patterns
-        patterns = [
-            os.path.join(self.game_path, "audio", "voices", "**", f"{script_name}_*.flac"),
-            os.path.join(self.game_path, "audio", "voices", "**", f"{script_name}*.flac"),
-            os.path.join(self.game_path, "audio", "**", f"{script_name}_*.flac"),
-            os.path.join(self.game_path, "**", "audio", "**", f"{script_name}_*.flac"),
+            
+        # Get script name without extension
+        script_name = Path(filename).stem
+        logger.info(f"Script name: {script_name}, Line: {lineno}")
+        
+        # Try multiple common locations and formats for voice files
+        potential_paths = []
+        
+        # Common audio formats
+        formats = ["ogg", "mp3", "wav", "flac"]
+        
+        # Try exact line matches first
+        for fmt in formats:
+            # Direct path with line number (different patterns)
+            potential_paths.extend([
+                os.path.join(self.game_path, f"{script_name}_{lineno}.{fmt}"),
+                os.path.join(self.game_path, f"{script_name}-{lineno}.{fmt}"),
+                os.path.join(self.game_path, f"{script_name}{lineno}.{fmt}"),
+            ])
+            
+            # Voice subdirectory
+            potential_paths.extend([
+                os.path.join(self.game_path, "voice", f"{script_name}_{lineno}.{fmt}"),
+                os.path.join(self.game_path, "Voice", f"{script_name}_{lineno}.{fmt}"),
+            ])
+            
+            # Audio voice subdirectory
+            potential_paths.extend([
+                os.path.join(self.game_path, "audio", "voice", f"{script_name}_{lineno}.{fmt}"),
+                os.path.join(self.game_path, "Audio", "Voice", f"{script_name}_{lineno}.{fmt}"),
+            ])
+            
+            # Game audio voice subdirectory
+            potential_paths.extend([
+                os.path.join(self.game_path, "game", "audio", "voice", f"{script_name}_{lineno}.{fmt}"),
+                os.path.join(self.game_path, "Game", "Audio", "Voice", f"{script_name}_{lineno}.{fmt}"),
+            ])
+            
+        # Log total search paths
+        logger.info(f"Trying {len(potential_paths)} potential voice file locations")
+        
+        # Check all potential paths
+        for voice_path in potential_paths:
+            logger.info(f"Looking for voice file: {voice_path}")
+            if os.path.exists(voice_path):
+                logger.info(f"FOUND voice file: {voice_path}")
+                return voice_path
+        
+        # If not found by exact path, try using glob to find any matching files
+        logger.info("No exact matches found, trying glob patterns...")
+        
+        glob_patterns = [
+            os.path.join(self.game_path, "**", f"{script_name}*{lineno}*.ogg"),
+            os.path.join(self.game_path, "**", f"{script_name}*{lineno}*.mp3"),
+            os.path.join(self.game_path, "**", f"{script_name}*{lineno}*.wav"),
+            os.path.join(self.game_path, "**", f"{script_name}*{lineno}*.flac"),
+            os.path.join(self.game_path, "**", f"*{script_name}*{lineno}*.ogg"),
+            os.path.join(self.game_path, "**", f"*voice*", f"*{script_name}*{lineno}*.ogg"),
         ]
-
-        for pattern in patterns:
-            matching_files = glob.glob(pattern, recursive=True)
-            if matching_files:
-                # If we have line numbers in filenames, try to find the closest match
-                for match in matching_files:
-                    if f"_{lineno}." in match or f"_{lineno}_" in match:
-                        return match
-
-                # If no exact line match, return the first match
-                return matching_files[0]
-
+        
+        for pattern in glob_patterns:
+            logger.info(f"Trying glob pattern: {pattern}")
+            matches = glob.glob(pattern, recursive=True)
+            if matches:
+                logger.info(f"Found {len(matches)} matches with pattern {pattern}")
+                for match in matches:
+                    logger.info(f"Match: {match}")
+                # Return the first match
+                logger.info(f"Using first match: {matches[0]}")
+                return matches[0]
+            
+        # If we still can't find anything, try a last resort - look for any voice files for this script
+        logger.warning(f"Last resort: looking for any voice files for script {script_name}")
+        last_resort_pattern = os.path.join(self.game_path, "**", f"*{script_name}*.ogg")
+        matches = glob.glob(last_resort_pattern, recursive=True)
+        if matches:
+            logger.info(f"Found {len(matches)} matches with pattern {last_resort_pattern}")
+            for match in matches:
+                logger.info(f"Match: {match}")
+            # Return the first match
+            logger.info(f"Using first match: {matches[0]}")
+            return matches[0]
+        
+        # If not found, log and return None
+        logger.warning(f"Voice file not found for script {script_name}, line {lineno} after exhaustive search")
         return None
 
     def _play_with_context(self, context_lines: int) -> None:
@@ -394,9 +588,18 @@ class TTSLabelApp(App):
         Args:
             context_lines: Number of context lines to include
         """
+        import threading
+        
         if not self.current_file:
+            logger.warning("No current file loaded, can't play context")
             return
 
+        # Log current file info for debugging
+        logger.info(f"Current file: {self.current_file['file_path']}")
+        logger.info(f"Script: {self.current_file['filename']}")
+        logger.info(f"Line: {self.current_file['lineno']}")
+        logger.info(f"Game path: {self.game_path}")
+        
         # First check if we have a context file to play
         before_file = None
         after_file = None
@@ -405,9 +608,36 @@ class TTSLabelApp(App):
         if context_lines > 0 and self.current_file["context_before"]:
             context_count = min(context_lines, len(self.current_file["context_before"]))
             context = self.current_file["context_before"][-context_count:]
+            logger.info(f"Looking for context before ({len(context)} lines)")
 
-            for ctx in reversed(context):
-                if "character" in ctx and ctx["character"] == "Princess":
+            for i, ctx in enumerate(reversed(context)):
+                logger.info(f"Context before #{i+1}: {ctx}")
+                
+                # First check if the context has a voice field directly (as shown in logs)
+                if "voice" in ctx and ctx["voice"]:
+                    voice_path = ctx["voice"]
+                    # If voice path is relative, make it absolute
+                    if not os.path.isabs(voice_path):
+                        voice_path = os.path.join(self.game_path, voice_path)
+                    
+                    logger.info(f"Found direct voice path in context: {voice_path}")
+                    
+                    if os.path.exists(voice_path):
+                        before_file = voice_path
+                        self.notify(
+                            f"Found context before voice: {os.path.basename(before_file)}",
+                            title="Context",
+                        )
+                        logger.info(f"SUCCESS! Using direct voice file for context before: {before_file}")
+                        break
+                    else:
+                        logger.warning(f"Direct voice file doesn't exist: {voice_path}")
+                
+                # Fallback to searching by character and line number
+                if "character" in ctx:
+                    logger.info(f"Checking line for character: {ctx.get('character', '')}")
+                    logger.info(f"Line text: {ctx.get('text', '')}")
+                    
                     # Try to find the voice file for this context
                     before_file = self._find_game_voice_file(
                         self.current_file["filename"], ctx.get("lineno", 0)
@@ -417,15 +647,46 @@ class TTSLabelApp(App):
                             f"Found context before: {os.path.basename(before_file)}\nPath: {before_file}",
                             title="Context",
                         )
+                        logger.info(f"SUCCESS! Found voice file for context before: {before_file}")
                         break
+                    else:
+                        logger.warning(f"No voice file found for context before, character: {ctx.get('character', 'unknown')}, line: {ctx.get('lineno', 0)}")
 
         # Try to find context after
         if context_lines > 0 and self.current_file["context_after"]:
+            # Make sure we get the correct number of lines
             context_count = min(context_lines, len(self.current_file["context_after"]))
             context = self.current_file["context_after"][:context_count]
+            logger.info(f"Looking for context after ({len(context)} lines) from {context_lines} requested")
 
-            for ctx in context:
-                if "character" in ctx and ctx["character"] == "Princess":
+            for i, ctx in enumerate(context):
+                logger.info(f"Context after #{i+1}: {ctx}")
+                
+                # First check if the context has a voice field directly
+                if "voice" in ctx and ctx["voice"]:
+                    voice_path = ctx["voice"]
+                    # If voice path is relative, make it absolute
+                    if not os.path.isabs(voice_path):
+                        voice_path = os.path.join(self.game_path, voice_path)
+                    
+                    logger.info(f"Found direct voice path in context: {voice_path}")
+                    
+                    if os.path.exists(voice_path):
+                        after_file = voice_path
+                        self.notify(
+                            f"Found context after voice: {os.path.basename(after_file)}",
+                            title="Context",
+                        )
+                        logger.info(f"SUCCESS! Using direct voice file for context after: {after_file}")
+                        break
+                    else:
+                        logger.warning(f"Direct voice file doesn't exist: {voice_path}")
+                
+                # Fallback to searching by character and line number
+                if "character" in ctx:
+                    logger.info(f"Checking line for character: {ctx.get('character', '')}")
+                    logger.info(f"Line text: {ctx.get('text', '')}")
+                    
                     # Try to find the voice file for this context
                     after_file = self._find_game_voice_file(
                         self.current_file["filename"], ctx.get("lineno", 0)
@@ -435,40 +696,71 @@ class TTSLabelApp(App):
                             f"Found context after: {os.path.basename(after_file)}\nPath: {after_file}",
                             title="Context",
                         )
+                        logger.info(f"SUCCESS! Found voice file for context after: {after_file}")
                         break
+                    else:
+                        logger.warning(f"No voice file found for context after, character: {ctx.get('character', 'unknown')}, line: {ctx.get('lineno', 0)}")
 
-        # Now play the sequence: before -> tts -> after
-        try:
-            if before_file:
-                self.notify(
-                    f"Playing context before\nPath: {before_file}", title="Context Playback"
-                )
-                self.audio_player.play(before_file)
-                # Wait for audio to finish
-                import time
-
-                while (
-                    self.audio_player.current_process
-                    and self.audio_player.current_process.poll() is None
-                ):
-                    time.sleep(0.5)
-
-            # Play the TTS file
-            self.action_play()
-            # Wait for audio to finish
-            import time
-
-            while (
-                self.audio_player.current_process
-                and self.audio_player.current_process.poll() is None
-            ):
+        # Import needed modules
+        import time
+        import threading
+        
+        # Create a function to play audio files in sequence
+        def play_sequence():
+            try:
+                # Play before context
+                if before_file:
+                    logger.info(f"Starting sequence - Playing context before: {before_file}")
+                    self.notify(f"Playing context before\nPath: {os.path.basename(before_file)}", title="Context Playback")
+                    try:
+                        # Play and wait for completion
+                        self.audio_player.play(before_file)
+                        while self.audio_player.is_playing:
+                            time.sleep(0.1)
+                        logger.info("Before context playback completed")
+                    except Exception as e:
+                        logger.error(f"Error playing before context: {str(e)}")
+                        self.notify(f"Error playing before context: {str(e)}", title="Playback Error")
+                
+                # Brief pause between audio files
                 time.sleep(0.5)
-
-            if after_file:
-                self.notify(f"Playing context after\nPath: {after_file}", title="Context Playback")
-                self.audio_player.play(after_file)
-        except Exception as e:
-            self.notify(f"Error during context playback: {str(e)}", title="Playback Error")
+                
+                # Play the TTS file
+                logger.info("Playing TTS file")
+                self.action_play()
+                # Wait for TTS to complete
+                while self.audio_player.is_playing:
+                    time.sleep(0.1)
+                logger.info("TTS playback completed")
+                
+                # Brief pause between audio files
+                time.sleep(0.5)
+                
+                # Play after context
+                if after_file:
+                    logger.info(f"Playing context after: {after_file}")
+                    self.notify(f"Playing context after\nPath: {os.path.basename(after_file)}", title="Context Playback")
+                    try:
+                        # Play and wait for completion
+                        self.audio_player.play(after_file)
+                        while self.audio_player.is_playing:
+                            time.sleep(0.1)
+                        logger.info("After context playback completed")
+                    except Exception as e:
+                        logger.error(f"Error playing after context: {str(e)}")
+                        self.notify(f"Error playing after context: {str(e)}", title="Playback Error")
+                
+                logger.info("Audio sequence complete")
+                    
+            except Exception as e:
+                logger.error(f"Error during context playback sequence: {str(e)}")
+                self.notify(f"Error during context playback: {str(e)}", title="Playback Error")
+        
+        # Start playback sequence in a separate thread to avoid blocking UI
+        sequence_thread = threading.Thread(target=play_sequence)
+        sequence_thread.daemon = True
+        sequence_thread.start()
+        logger.info("Started audio sequence playback thread")
 
 
 def setup_tts_data(
@@ -488,47 +780,45 @@ def setup_tts_data(
     db = TTSDatabase(db_path)
 
     # Extract choices
-    print("Extracting choices from scripts...")
+    logger.info("Extracting choices from scripts...")
     choices = extract_all_choices(game_path)
-    print(f"Found {len(choices)} choices")
+    logger.info(f"Found {len(choices)} choices")
 
     # Import choices to database
-    print("Importing choices to database...")
+    logger.info("Importing choices to database...")
     db.import_choices(choices)
 
     # Check if TTS directory exists
     if not os.path.exists(tts_dir):
-        print(f"\nWarning: TTS directory '{tts_dir}' does not exist. Creating it now.")
+        logger.warning(f"TTS directory '{tts_dir}' does not exist. Creating it now.")
         os.makedirs(tts_dir, exist_ok=True)
-        print(f"Created directory: {tts_dir}")
-        print(
-            f"Note: No TTS files found. You need to generate TTS files and place them in this directory."
-        )
+        logger.info(f"Created directory: {tts_dir}")
+        logger.info(f"Note: No TTS files found. You need to generate TTS files and place them in this directory.")
     else:
         # Scan TTS directory
-        print(f"Scanning TTS directory: {tts_dir}")
+        logger.info(f"Scanning TTS directory: {tts_dir}")
         # Check if there are any .flac files in the directory
         flac_files = list(Path(tts_dir).glob("*.flac"))
         if not flac_files:
-            print(f"No .flac files found in {tts_dir}. You need to generate TTS files first.")
+            logger.warning(f"No .flac files found in {tts_dir}. You need to generate TTS files first.")
         db.scan_tts_directory(tts_dir)
 
-    # Print stats
+    # Log stats
     stats = db.get_stats()
-    print("\nTTS Database Statistics:")
-    print(f"Total choices: {stats['total_choices']}")
-    print(f"Total TTS files: {stats['total_files']}")
-    print(f"Pending: {stats['pending']}")
-    print(f"Approved: {stats['approved']}")
-    print(f"Rejected: {stats['rejected']}")
+    logger.info("\nTTS Database Statistics:")
+    logger.info(f"Total choices: {stats['total_choices']}")
+    logger.info(f"Total TTS files: {stats['total_files']}")
+    logger.info(f"Pending: {stats['pending']}")
+    logger.info(f"Approved: {stats['approved']}")
+    logger.info(f"Rejected: {stats['rejected']}")
 
     if stats["total_files"] == 0:
-        print("\nNo TTS files found in the database. Next steps:")
-        print("1. Export choices with: princess-tts export")
-        print("2. Generate TTS files using the exported JSON")
-        print("3. Place the generated .flac files in the TTS directory")
-        print("4. Run 'princess-tts setup' again to scan the TTS files")
-        print("5. Label the TTS files with: princess-tts label")
+        logger.info("\nNo TTS files found in the database. Next steps:")
+        logger.info("1. Export choices with: princess-tts export")
+        logger.info("2. Generate TTS files using the exported JSON")
+        logger.info("3. Place the generated .flac files in the TTS directory")
+        logger.info("4. Run 'princess-tts setup' again to scan the TTS files")
+        logger.info("5. Label the TTS files with: princess-tts label")
 
 
 def main():

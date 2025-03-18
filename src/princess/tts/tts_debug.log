@@ -1,0 +1,106 @@
+2025-03-19 00:17:33,737 - INFO - Context line content: n: You're on a path in the woods. And at the end of that path is a cabin. And in the basement of that cabin is a Princess.\n
+2025-03-19 00:17:33,738 - INFO - Context line content: n: You're here to slay her.\n If you don't, it will be the end of the world.\n
+2025-03-19 00:17:33,738 - INFO - Context line content: n: Just be quick about it.\n
+2025-03-19 00:17:33,739 - INFO - Context line content: n: She just can. But she's still only a Princess. You're fully up to the task you've been given, so long as you remember that.\n
+2025-03-19 00:17:37,930 - INFO - Current file: output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:17:37,930 - INFO - Script: razor_1_start.rpy
+2025-03-19 00:17:37,930 - INFO - Line: 185
+2025-03-19 00:17:37,930 - INFO - Game path: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game
+2025-03-19 00:17:37,930 - INFO - Looking for context before (3 lines)
+2025-03-19 00:17:37,931 - INFO - Context before #1: {'character': 'n', 'text': 'Just be quick about it.\\n', 'voice': 'audio/voices/ch2/shared/narrator/ch2_share_n_14.flac', 'label': 'razor_1_forest_narrator_share_join', 'node_id': 'node_52'}
+2025-03-19 00:17:37,931 - INFO - Found direct voice path in context: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:17:37,931 - INFO - SUCCESS! Using direct voice file for context before: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:17:37,931 - INFO - Looking for context after (1 lines)
+2025-03-19 00:17:37,931 - INFO - Context after #1: {'character': 'n', 'text': "She just can. But she's still only a Princess. You're fully up to the task you've been given, so long as you remember that.\\n", 'voice': 'audio/voices/ch2/razor/narrator/ch2_rn_11.flac', 'label': 'razor_1_forest_princess', 'node_id': 'node_59'}
+2025-03-19 00:17:37,931 - INFO - Found direct voice path in context: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:17:37,931 - INFO - SUCCESS! Using direct voice file for context after: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:17:37,932 - INFO - Playing audio file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:17:37,932 - INFO - File exists: True, File size: 67071 bytes
+2025-03-19 00:17:37,932 - INFO - Command: afplay /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:17:37,937 - INFO - Started playback thread for ch2_share_n_14.flac
+2025-03-19 00:17:37,940 - INFO - Started playback process for /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:17:38,445 - INFO - Stopped audio playback
+2025-03-19 00:17:38,453 - INFO - Playing audio file: output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:17:38,456 - INFO - File exists: True, File size: 119490 bytes
+2025-03-19 00:17:38,456 - INFO - Command: afplay output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:17:38,457 - INFO - Started playback thread for 3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:17:38,458 - INFO - Playback of ch2_share_n_14.flac completed with return code -15
+2025-03-19 00:17:38,460 - INFO - Started playback process for output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:17:38,967 - INFO - Stopped audio playback
+2025-03-19 00:17:38,990 - INFO - Playing audio file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:17:38,990 - INFO - File exists: True, File size: 376555 bytes
+2025-03-19 00:17:38,990 - INFO - Command: afplay /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:17:38,992 - INFO - Playback of 3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac completed with return code -15
+2025-03-19 00:17:38,992 - INFO - Started playback thread for ch2_rn_11.flac
+2025-03-19 00:17:38,996 - INFO - Started playback process for /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:17:48,369 - INFO - Playback of ch2_rn_11.flac completed with return code 0
+2025-03-19 00:20:17,335 - INFO - Found voice path in context data: audio/voices/ch1/woods/narrator/script_n_1.flac
+2025-03-19 00:20:17,336 - INFO - Using absolute voice path: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch1/woods/narrator/script_n_1.flac
+2025-03-19 00:20:17,336 - INFO - Using direct voice file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch1/woods/narrator/script_n_1.flac
+2025-03-19 00:20:17,336 - INFO - Context line content: n: You're on a path in the woods. And at the end of that path is a cabin. And in the basement of that cabin is a Princess.\n
+Voice: [dim]script_n_1.flac[/dim]
+2025-03-19 00:20:17,336 - INFO - Found voice path in context data: audio/voices/ch1/woods/narrator/script_n_2.flac
+2025-03-19 00:20:17,336 - INFO - Using absolute voice path: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch1/woods/narrator/script_n_2.flac
+2025-03-19 00:20:17,336 - INFO - Using direct voice file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch1/woods/narrator/script_n_2.flac
+2025-03-19 00:20:17,336 - INFO - Context line content: n: You're here to slay her.\n If you don't, it will be the end of the world.\n
+Voice: [dim]script_n_2.flac[/dim]
+2025-03-19 00:20:17,336 - INFO - Found voice path in context data: audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:17,336 - INFO - Using absolute voice path: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:17,336 - INFO - Using direct voice file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:17,336 - INFO - Context line content: n: Just be quick about it.\n
+Voice: [dim]ch2_share_n_14.flac[/dim]
+2025-03-19 00:20:17,337 - INFO - Found voice path in context data: audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:17,337 - INFO - Using absolute voice path: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:17,337 - INFO - Using direct voice file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:17,337 - INFO - Context line content: n: She just can. But she's still only a Princess. You're fully up to the task you've been given, so long as you remember that.\n
+Voice: [dim]ch2_rn_11.flac[/dim]
+2025-03-19 00:20:24,969 - INFO - Playing audio file: output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:24,969 - INFO - File exists: True, File size: 119490 bytes
+2025-03-19 00:20:24,969 - INFO - Command: afplay output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:24,971 - INFO - Started playback thread for 3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:24,974 - INFO - Started playback process for output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:30,940 - INFO - Playback of 3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac completed with return code 0
+2025-03-19 00:20:31,451 - INFO - Current file: output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:31,451 - INFO - Script: razor_1_start.rpy
+2025-03-19 00:20:31,451 - INFO - Line: 185
+2025-03-19 00:20:31,451 - INFO - Game path: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game
+2025-03-19 00:20:31,451 - INFO - Looking for context before (1 lines)
+2025-03-19 00:20:31,451 - INFO - Context before #1: {'character': 'n', 'text': 'Just be quick about it.\\n', 'voice': 'audio/voices/ch2/shared/narrator/ch2_share_n_14.flac', 'label': 'razor_1_forest_narrator_share_join', 'node_id': 'node_52'}
+2025-03-19 00:20:31,451 - INFO - Found direct voice path in context: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:31,451 - INFO - SUCCESS! Using direct voice file for context before: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:31,451 - INFO - Looking for context after (1 lines) from 1 requested
+2025-03-19 00:20:31,451 - INFO - Context after #1: {'character': 'n', 'text': "She just can. But she's still only a Princess. You're fully up to the task you've been given, so long as you remember that.\\n", 'voice': 'audio/voices/ch2/razor/narrator/ch2_rn_11.flac', 'label': 'razor_1_forest_princess', 'node_id': 'node_59'}
+2025-03-19 00:20:31,451 - INFO - Found direct voice path in context: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:31,452 - INFO - SUCCESS! Using direct voice file for context after: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:31,452 - INFO - Starting sequence - Playing context before: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:31,452 - INFO - Playing audio file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:31,452 - INFO - Started audio sequence playback thread
+2025-03-19 00:20:31,452 - INFO - File exists: True, File size: 67071 bytes
+2025-03-19 00:20:31,456 - INFO - Command: afplay /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:31,458 - INFO - Started playback thread for ch2_share_n_14.flac
+2025-03-19 00:20:31,463 - INFO - Started playback process for /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/shared/narrator/ch2_share_n_14.flac
+2025-03-19 00:20:34,090 - INFO - Playback of ch2_share_n_14.flac completed with return code 0
+2025-03-19 00:20:34,158 - INFO - Before context playback completed
+2025-03-19 00:20:34,662 - INFO - Playing TTS file
+2025-03-19 00:20:34,665 - INFO - Playing audio file: output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:34,665 - INFO - File exists: True, File size: 119490 bytes
+2025-03-19 00:20:34,665 - INFO - Command: afplay output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:34,672 - INFO - Started playback thread for 3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:34,677 - INFO - Started playback process for output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:40,467 - INFO - Playback of 3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac completed with return code 0
+2025-03-19 00:20:40,475 - INFO - TTS playback completed
+2025-03-19 00:20:40,980 - INFO - Playing context after: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:40,983 - INFO - Playing audio file: /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:40,984 - INFO - File exists: True, File size: 376555 bytes
+2025-03-19 00:20:40,984 - INFO - Command: afplay /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:40,986 - INFO - Started playback thread for ch2_rn_11.flac
+2025-03-19 00:20:40,993 - INFO - Started playback process for /Users/banteg/Downloads/renpy-8.3.6-sdk/slay/game/audio/voices/ch2/razor/narrator/ch2_rn_11.flac
+2025-03-19 00:20:47,321 - INFO - Stopped audio playback
+2025-03-19 00:20:47,322 - INFO - Playback of ch2_rn_11.flac completed with return code -15
+2025-03-19 00:20:47,396 - INFO - After context playback completed
+2025-03-19 00:20:47,397 - INFO - Audio sequence complete
+2025-03-19 00:20:53,094 - INFO - Playing audio file: output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:53,095 - INFO - File exists: True, File size: 119490 bytes
+2025-03-19 00:20:53,095 - INFO - Command: afplay output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:53,099 - INFO - Started playback thread for 3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac
+2025-03-19 00:20:53,107 - INFO - Started playback process for output/voice/3a37f84af8dc721c411aeea6403671673987e33c1d8391f1be78a7e9c6ef2b48.flac

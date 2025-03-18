@@ -118,6 +118,20 @@ Footer {
     margin: 1 0;
 }
 
+.context-line {
+    background: $surface-darken-2;
+    border: solid $surface-darken-3;
+    margin-bottom: 1;
+}
+
+/* Style for audio filenames */
+.audio-file {
+    color: $text-muted;
+    text-style: italic;
+    background: $surface-darken-1;
+    padding: 0 1;
+}
+
 .stats-row {
     width: 100%;
     height: auto;
