@@ -13,10 +13,10 @@ from textual.reactive import reactive
 
 from princess.tts.database import TTSDatabase
 
-# Set up logging to file and console
+# Set up logging to file only
 log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tts_debug.log")
 
-# Create logger
+# Create logger - only logging to file, no console output
 logger = logging.getLogger("tts_app")
 logger.setLevel(logging.INFO)
 logger.propagate = False  # Don't propagate to root logger
@@ -26,14 +26,8 @@ file_handler = logging.FileHandler(log_file)
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 
-# Console handler for terminal output
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(logging.Formatter("%(message)s"))
-
-# Add handlers to logger
+# Add handler to logger (only file handler, no console handler)
 logger.addHandler(file_handler)
-logger.addHandler(console_handler)
 
 
 class AudioPlayer:
@@ -173,6 +167,7 @@ class TTSLabelApp(App):
         self.tts_dir = tts_dir
         self.game_path = game_path or os.environ.get("GAME_PATH", "")
         self.audio_player = AudioPlayer()
+        self._closing = False  # Flag to indicate app is closing
 
     def on_mount(self) -> None:
         """Load the next file when the app starts."""
@@ -216,7 +211,6 @@ class TTSLabelApp(App):
             self.action_reject()
         elif button_id == "next-btn":
             logger.info("Next button pressed")
-            self.notify("Next button pressed", title="Next")
             self.action_next()  # Use action_next instead
 
     def _create_context_line(
@@ -264,14 +258,20 @@ class TTSLabelApp(App):
 
         # Add voice file info
         if direct_voice and os.path.exists(direct_voice):
-            # Use the direct voice path from context
-            audio_file = os.path.basename(direct_voice)
-            content_parts.append(f"Voice: [dim]{audio_file}[/dim]")
+            # Use the direct voice path from context - show relative to game dir if possible
+            if self.game_path and direct_voice.startswith(self.game_path):
+                rel_path = os.path.relpath(direct_voice, self.game_path)
+                content_parts.append(f"Voice: [dim]{rel_path}[/dim]")
+            else:
+                content_parts.append(f"Voice: [dim]{direct_voice}[/dim]")
             logger.info(f"Using direct voice file: {direct_voice}")
         elif voice_path and os.path.exists(voice_path):
-            # Use the found voice path
-            audio_file = os.path.basename(voice_path)
-            content_parts.append(f"Voice: [dim]{audio_file}[/dim]")
+            # Use the found voice path - show relative to game dir if possible
+            if self.game_path and voice_path.startswith(self.game_path):
+                rel_path = os.path.relpath(voice_path, self.game_path)
+                content_parts.append(f"Voice: [dim]{rel_path}[/dim]")
+            else:
+                content_parts.append(f"Voice: [dim]{voice_path}[/dim]")
             logger.info(f"Using found voice file: {voice_path}")
 
         # Join parts with newlines
@@ -440,7 +440,15 @@ class TTSLabelApp(App):
 
     def load_next_file(self) -> None:
         """Load the next pending file for review."""
-        self.current_file = self.db.get_next_pending_file()
+        logger.info("Loading next file...")
+        next_file = self.db.get_next_pending_file()
+        
+        if next_file:
+            logger.info(f"Next file found: {next_file.get('file_path', 'unknown')}")
+        else:
+            logger.info("No more files to label")
+            
+        self.current_file = next_file
         self.update_stats()
 
     def action_play(self) -> None:
@@ -452,25 +460,22 @@ class TTSLabelApp(App):
         file_hash = Path(self.current_file["file_path"]).stem
         tts_file_path = os.path.join(self.tts_dir, f"{file_hash}.flac")
 
-        # Show notification about the file being played
-        self.notify(f"Playing TTS file: {file_hash}.flac", title="Audio Playback")
+        # Log the file being played
+        logger.info(f"Playing TTS file: {file_hash}.flac")
 
         # Try to play the file
         try:
             self.audio_player.play(tts_file_path)
         except Exception as e:
-            self.notify(f"Error playing audio: {str(e)}", title="Playback Error")
+            logger.error(f"Error playing audio: {str(e)}")
             # Try finding the file - maybe it has a different extension?
             import glob
 
             possible_files = glob.glob(os.path.join(self.tts_dir, f"{file_hash}.*"))
             if possible_files:
-                self.notify(
-                    f"Found alternative files: {', '.join(Path(f).name for f in possible_files)}",
-                    title="Debug",
-                )
+                logger.info(f"Found alternative files: {', '.join(Path(f).name for f in possible_files)}")
             else:
-                self.notify(f"No files found in {self.tts_dir} for hash {file_hash}", title="Debug")
+                logger.warning(f"No files found in {self.tts_dir} for hash {file_hash}")
 
     def action_stop(self) -> None:
         """Stop the currently playing audio."""
@@ -492,7 +497,6 @@ class TTSLabelApp(App):
         """Skip to the next file without changing status."""
         # This is now triggered by 't' key
         logger.info("Next action triggered")
-        self.notify("Loading next file...", title="Next")
         self.load_next_file()
 
     def action_toggle_play(self) -> None:
@@ -522,6 +526,19 @@ class TTSLabelApp(App):
     def action_play_context_3(self) -> None:
         """Play with 3 lines of context before and after."""
         self._play_with_context(3)
+        
+    def action_quit(self) -> None:
+        """Quit the application."""
+        logger.info("Quitting application")
+        self._closing = True
+        self.audio_player.stop()
+        self.exit()
+        
+    def on_unmount(self) -> None:
+        """Clean up resources when the app is closed."""
+        logger.info("App unmounting, stopping audio playback")
+        self._closing = True
+        self.audio_player.stop()
 
     def _find_game_voice_file(self, filename: str, lineno: int) -> Optional[str]:
         """Try to find a voice file in the game folder.
@@ -658,73 +675,20 @@ class TTSLabelApp(App):
         logger.info(f"Line: {self.current_file['lineno']}")
         logger.info(f"Game path: {self.game_path}")
 
-        # First check if we have a context file to play
-        before_file = None
-        after_file = None
+        # Collect files to play before and after
+        before_files = []
+        after_files = []
 
-        # Try to find context files from the game directory
+        # Try to find context files from the game directory for before context
         if context_lines > 0 and self.current_file["context_before"]:
             context_count = min(context_lines, len(self.current_file["context_before"]))
             context = self.current_file["context_before"][-context_count:]
             logger.info(f"Looking for context before ({len(context)} lines)")
-
+            
+            # Process them in reverse order (from closest to furthest)
             for i, ctx in enumerate(reversed(context)):
                 logger.info(f"Context before #{i + 1}: {ctx}")
-
-                # First check if the context has a voice field directly (as shown in logs)
-                if "voice" in ctx and ctx["voice"]:
-                    voice_path = ctx["voice"]
-                    # If voice path is relative, make it absolute
-                    if not os.path.isabs(voice_path):
-                        voice_path = os.path.join(self.game_path, voice_path)
-
-                    logger.info(f"Found direct voice path in context: {voice_path}")
-
-                    if os.path.exists(voice_path):
-                        before_file = voice_path
-                        self.notify(
-                            f"Found context before voice: {os.path.basename(before_file)}",
-                            title="Context",
-                        )
-                        logger.info(
-                            f"SUCCESS! Using direct voice file for context before: {before_file}"
-                        )
-                        break
-                    else:
-                        logger.warning(f"Direct voice file doesn't exist: {voice_path}")
-
-                # Fallback to searching by character and line number
-                if "character" in ctx:
-                    logger.info(f"Checking line for character: {ctx.get('character', '')}")
-                    logger.info(f"Line text: {ctx.get('text', '')}")
-
-                    # Try to find the voice file for this context
-                    before_file = self._find_game_voice_file(
-                        self.current_file["filename"], ctx.get("lineno", 0)
-                    )
-                    if before_file:
-                        self.notify(
-                            f"Found context before: {os.path.basename(before_file)}\nPath: {before_file}",
-                            title="Context",
-                        )
-                        logger.info(f"SUCCESS! Found voice file for context before: {before_file}")
-                        break
-                    else:
-                        logger.warning(
-                            f"No voice file found for context before, character: {ctx.get('character', 'unknown')}, line: {ctx.get('lineno', 0)}"
-                        )
-
-        # Try to find context after
-        if context_lines > 0 and self.current_file["context_after"]:
-            # Make sure we get the correct number of lines
-            context_count = min(context_lines, len(self.current_file["context_after"]))
-            context = self.current_file["context_after"][:context_count]
-            logger.info(
-                f"Looking for context after ({len(context)} lines) from {context_lines} requested"
-            )
-
-            for i, ctx in enumerate(context):
-                logger.info(f"Context after #{i + 1}: {ctx}")
+                voice_file = None
 
                 # First check if the context has a voice field directly
                 if "voice" in ctx and ctx["voice"]:
@@ -736,38 +700,82 @@ class TTSLabelApp(App):
                     logger.info(f"Found direct voice path in context: {voice_path}")
 
                     if os.path.exists(voice_path):
-                        after_file = voice_path
-                        self.notify(
-                            f"Found context after voice: {os.path.basename(after_file)}",
-                            title="Context",
-                        )
-                        logger.info(
-                            f"SUCCESS! Using direct voice file for context after: {after_file}"
-                        )
-                        break
+                        voice_file = voice_path
+                        logger.info(f"SUCCESS! Using direct voice file for context before: {voice_file}")
                     else:
                         logger.warning(f"Direct voice file doesn't exist: {voice_path}")
 
                 # Fallback to searching by character and line number
-                if "character" in ctx:
+                if not voice_file and "character" in ctx:
                     logger.info(f"Checking line for character: {ctx.get('character', '')}")
                     logger.info(f"Line text: {ctx.get('text', '')}")
 
                     # Try to find the voice file for this context
-                    after_file = self._find_game_voice_file(
+                    voice_file = self._find_game_voice_file(
                         self.current_file["filename"], ctx.get("lineno", 0)
                     )
-                    if after_file:
-                        self.notify(
-                            f"Found context after: {os.path.basename(after_file)}\nPath: {after_file}",
-                            title="Context",
+                    if voice_file:
+                        logger.info(f"SUCCESS! Found voice file for context before: {voice_file}")
+                    else:
+                        logger.warning(
+                            f"No voice file found for context before, character: {ctx.get('character', 'unknown')}, line: {ctx.get('lineno', 0)}"
                         )
-                        logger.info(f"SUCCESS! Found voice file for context after: {after_file}")
-                        break
+                
+                # Add file to the list if found
+                if voice_file:
+                    before_files.append(voice_file)
+
+        # Add files in the correct order (closest first)
+        before_files.reverse()
+        logger.info(f"Found {len(before_files)} voice files for context before")
+        
+        # Try to find context after files
+        if context_lines > 0 and self.current_file["context_after"]:
+            # Make sure we get the correct number of lines
+            context_count = min(context_lines, len(self.current_file["context_after"]))
+            context = self.current_file["context_after"][:context_count]
+            logger.info(f"Looking for context after ({len(context)} lines) from {context_lines} requested")
+
+            for i, ctx in enumerate(context):
+                logger.info(f"Context after #{i + 1}: {ctx}")
+                voice_file = None
+
+                # First check if the context has a voice field directly
+                if "voice" in ctx and ctx["voice"]:
+                    voice_path = ctx["voice"]
+                    # If voice path is relative, make it absolute
+                    if not os.path.isabs(voice_path):
+                        voice_path = os.path.join(self.game_path, voice_path)
+
+                    logger.info(f"Found direct voice path in context: {voice_path}")
+
+                    if os.path.exists(voice_path):
+                        voice_file = voice_path
+                        logger.info(f"SUCCESS! Using direct voice file for context after: {voice_file}")
+                    else:
+                        logger.warning(f"Direct voice file doesn't exist: {voice_path}")
+
+                # Fallback to searching by character and line number
+                if not voice_file and "character" in ctx:
+                    logger.info(f"Checking line for character: {ctx.get('character', '')}")
+                    logger.info(f"Line text: {ctx.get('text', '')}")
+
+                    # Try to find the voice file for this context
+                    voice_file = self._find_game_voice_file(
+                        self.current_file["filename"], ctx.get("lineno", 0)
+                    )
+                    if voice_file:
+                        logger.info(f"SUCCESS! Found voice file for context after: {voice_file}")
                     else:
                         logger.warning(
                             f"No voice file found for context after, character: {ctx.get('character', 'unknown')}, line: {ctx.get('lineno', 0)}"
                         )
+                
+                # Add file to the list if found
+                if voice_file:
+                    after_files.append(voice_file)
+                    
+        logger.info(f"Found {len(after_files)} voice files for context after")
 
         # Import needed modules
         import time
@@ -777,64 +785,61 @@ class TTSLabelApp(App):
         def play_sequence():
             nonlocal play_after  # Ensure play_after is accessible in the closure
             try:
-                # Play before context
-                if before_file:
-                    logger.info(f"Starting sequence - Playing context before: {before_file}")
-                    self.notify(
-                        f"Playing context before\nPath: {os.path.basename(before_file)}",
-                        title="Context Playback",
-                    )
+                # Function to play a single file
+                def play_file(file_path, description):
                     try:
-                        # Play and wait for completion
-                        self.audio_player.play(before_file)
-                        while self.audio_player.is_playing:
+                        logger.info(f"Playing {description}: {file_path}")
+                        self.audio_player.play(file_path)
+                        # Wait for completion or until app is closing
+                        while self.audio_player.is_playing and not self._closing:
                             time.sleep(0.1)
-                        logger.info("Before context playback completed")
+                        if self._closing:
+                            logger.info(f"App is closing, stopping playback")
+                            self.audio_player.stop()
+                            return False  # Signal to stop sequence
+                        logger.info(f"{description} playback completed")
+                        return True  # Continue sequence
                     except Exception as e:
-                        logger.error(f"Error playing before context: {str(e)}")
-                        self.notify(
-                            f"Error playing before context: {str(e)}", title="Playback Error"
-                        )
-
-                # Brief pause between audio files
-                time.sleep(0.1)
+                        logger.error(f"Error playing {description}: {str(e)}")
+                        return True  # Try to continue sequence
+                
+                # Play all before context files
+                for i, file_path in enumerate(before_files):
+                    logger.info(f"Starting to play context before file {i+1}/{len(before_files)}")
+                    if not play_file(file_path, f"context before #{i+1}"):
+                        return  # Stop if app is closing
+                    # Brief pause between files
+                    time.sleep(0.1)
 
                 # Play the TTS file
                 logger.info("Playing TTS file")
                 self.action_play()
-                # Wait for TTS to complete
-                while self.audio_player.is_playing:
+                # Wait for TTS to complete or app closing
+                while self.audio_player.is_playing and not self._closing:
                     time.sleep(0.1)
+                if self._closing:
+                    logger.info(f"App is closing, stopping playback")
+                    self.audio_player.stop()
+                    return
                 logger.info("TTS playback completed")
 
                 # Only play after context if requested
-                if play_after and after_file:
+                if play_after and after_files:
                     # Brief pause between audio files
                     time.sleep(0.1)
 
-                    # Play after context
-                    logger.info(f"Playing context after: {after_file}")
-                    self.notify(
-                        f"Playing context after\nPath: {os.path.basename(after_file)}",
-                        title="Context Playback",
-                    )
-                    try:
-                        # Play and wait for completion
-                        self.audio_player.play(after_file)
-                        while self.audio_player.is_playing:
-                            time.sleep(0.1)
-                        logger.info("After context playback completed")
-                    except Exception as e:
-                        logger.error(f"Error playing after context: {str(e)}")
-                        self.notify(
-                            f"Error playing after context: {str(e)}", title="Playback Error"
-                        )
+                    # Play all after context files
+                    for i, file_path in enumerate(after_files):
+                        logger.info(f"Starting to play context after file {i+1}/{len(after_files)}")
+                        if not play_file(file_path, f"context after #{i+1}"):
+                            return  # Stop if app is closing
+                        # Brief pause between files
+                        time.sleep(0.1)
 
                 logger.info("Audio sequence complete")
 
             except Exception as e:
                 logger.error(f"Error during context playback sequence: {str(e)}")
-                self.notify(f"Error during context playback: {str(e)}", title="Playback Error")
 
         # Start playback sequence in a separate thread to avoid blocking UI
         # Directly passing play_after is not needed since we use nonlocal to capture it
