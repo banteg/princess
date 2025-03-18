@@ -4,11 +4,12 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Union
 
 from princess.choices import extract_script_structure
 from princess.constants import CHARACTERS
 from princess.utils.text import clean_text_for_voice
+from princess.utils.file import walk_script_files
 
 
 def clean_choice_for_tts(choice_text: str) -> str:
@@ -122,17 +123,17 @@ def extract_choices_from_file(script_path: str) -> List[Dict[str, Any]]:
     return enriched_choices
 
 
-def extract_all_choices(base_dir: str = '.') -> List[Dict[str, Any]]:
-    """Extract choices from all script files in the given directory.
+def extract_all_choices(game_path: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
+    """Extract choices from all script files in the game.
     
     Args:
-        base_dir: Base directory to search for script files
+        game_path: Optional path to game directory. If None, uses GAME_PATH env variable.
         
     Returns:
         List of all enriched choice data
     """
-    # Find all .rpy files
-    script_files = list(Path(base_dir).glob('**/*.rpy'))
+    # Get all script files using the utility function
+    script_files = list(walk_script_files(game_path))
     
     all_choices = []
     for script_file in script_files:
@@ -145,14 +146,14 @@ def extract_all_choices(base_dir: str = '.') -> List[Dict[str, Any]]:
     return all_choices
 
 
-def export_choices_for_tts(output_file: str, base_dir: str = '.') -> None:
+def export_choices_for_tts(output_file: str, game_path: Optional[Union[str, Path]] = None) -> None:
     """Extract choices and export them to a JSON file for TTS processing.
     
     Args:
         output_file: Path to the output JSON file
-        base_dir: Base directory to search for script files
+        game_path: Optional path to game directory. If None, uses GAME_PATH env variable.
     """
-    all_choices = extract_all_choices(base_dir)
+    all_choices = extract_all_choices(game_path)
     
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(all_choices, f, indent=2)

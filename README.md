@@ -10,6 +10,7 @@ Utilities for working with Slay the Princess game files.
 - Find labels and jumps between scenes
 - Generate a graph representation of script flow
 - Clean text for TTS processing
+- Label and manage TTS audio files for player choices
 
 ## Installation
 
@@ -44,6 +45,23 @@ jumps = list(find_labels_and_jumps())
 graph = jumps_to_graph(jumps)
 nx.write_graphml(graph, "output/jumps.graphml")
 ```
+
+## TTS Module
+
+The TTS module helps with managing text-to-speech generation for player choices:
+
+```bash
+# Export choices for TTS generation
+princess-tts export --output choices_for_tts.json --game-path /path/to/game
+
+# Set up the TTS database and scan for files
+princess-tts setup --db tts_choices.db --tts-dir tts_files --game-path /path/to/game
+
+# Launch the TUI for labeling TTS files
+princess-tts label --db tts_choices.db --tts-dir tts_files
+```
+
+See [TTS Module Documentation](src/princess/tts/README.md) for details.
 
 ## Development
 

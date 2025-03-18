@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Button, Static
@@ -255,13 +255,13 @@ class TTSLabelApp(App):
         )
 
 
-def setup_tts_data(db_path: str, tts_dir: str, script_dir: str) -> None:
+def setup_tts_data(db_path: str, tts_dir: str, game_path: Optional[Union[str, Path]] = None) -> None:
     """Set up the TTS database and scan for files.
     
     Args:
         db_path: Path to the SQLite database
         tts_dir: Directory containing TTS files
-        script_dir: Directory containing script files
+        game_path: Optional path to game directory. If None, uses GAME_PATH env variable.
     """
     from princess.tts.extractor import extract_all_choices
     
@@ -270,7 +270,7 @@ def setup_tts_data(db_path: str, tts_dir: str, script_dir: str) -> None:
     
     # Extract choices
     print("Extracting choices from scripts...")
-    choices = extract_all_choices(script_dir)
+    choices = extract_all_choices(game_path)
     print(f"Found {len(choices)} choices")
     
     # Import choices to database
@@ -302,8 +302,8 @@ def main():
     export_parser = subparsers.add_parser("export", help="Export choices for TTS generation")
     export_parser.add_argument("--output", "-o", default="choices_for_tts.json", 
                                help="Output JSON file")
-    export_parser.add_argument("--dir", "-d", default=".", 
-                               help="Directory containing script files")
+    export_parser.add_argument("--game-path", "-g", default=None, 
+                               help="Path to game directory. If not specified, uses GAME_PATH env variable")
     
     # Setup command
     setup_parser = subparsers.add_parser("setup", help="Set up the TTS database and scan for files")
@@ -311,8 +311,8 @@ def main():
                               help="Path to the SQLite database")
     setup_parser.add_argument("--tts-dir", default="tts_files", 
                               help="Directory containing TTS files")
-    setup_parser.add_argument("--script-dir", default=".", 
-                              help="Directory containing script files")
+    setup_parser.add_argument("--game-path", "-g", default=None, 
+                              help="Path to game directory. If not specified, uses GAME_PATH env variable")
     
     # Label command
     label_parser = subparsers.add_parser("label", help="Start the TTS labeling interface")
@@ -325,12 +325,12 @@ def main():
     
     if args.command == "export":
         from princess.tts.extractor import export_choices_for_tts
-        export_choices_for_tts(args.output, args.dir)
+        export_choices_for_tts(args.output, args.game_path)
     
     elif args.command == "setup":
         # Create TTS directory if it doesn't exist
         os.makedirs(args.tts_dir, exist_ok=True)
-        setup_tts_data(args.db, args.tts_dir, args.script_dir)
+        setup_tts_data(args.db, args.tts_dir, args.game_path)
     
     elif args.command == "label":
         app = TTSLabelApp(args.db, args.tts_dir)
