@@ -1,7 +1,10 @@
 import re
 from pathlib import Path
 
+import rich
 from lark import Lark
+import typer
+
 from princess.constants import CHARACTERS
 
 
@@ -46,3 +49,14 @@ grammar = Lark(
 """,
     start="script",
 )
+
+
+def parse_script(path: Path):
+    script = clean_script(path)
+    result = grammar.parse(script)
+    rich.print(result)
+    return result
+
+
+if __name__ == "__main__":
+    typer.run(parse_script)
