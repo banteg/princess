@@ -74,8 +74,8 @@ grammar = Lark(
     voice: "voice" quoted
     condition: "if" /[^\n:]+/    # if statement
 
-    ?identifier: /[a-zA-Z_]\w*/  # python identifier
-    ?quoted: "\"" /[^\"]+/ "\""  # quoted string
+    identifier: /[a-zA-Z_]\w*/  # python identifier
+    quoted: "\"" /[^\"]+/ "\""  # quoted string
     """,
     parser="lalr",
     postlex=RenpyIndenter(),
@@ -117,11 +117,6 @@ class Label(Line):
 @dataclass
 class Text(Line):
     text: str
-
-
-@dataclass
-class Block(Line):
-    statements: list[Line]
 
 
 class ChoicesTransformer(Transformer):
@@ -183,29 +178,34 @@ class ChoicesTransformer(Transformer):
         return Tree("menu", items)
 
     def choice(self, items):
-        rich.print("---- CHOICE ----", items, "end choice")
-        return Tree("choice", items)
+        choice, *rest = items
+        condition = None
+        next_dialogue = []
+        if rest and isinstance(rest[0], str):
+            condition = rest[0]
+            rest = rest[1:]
+        if rest:
+            next_dialogue = list(self.extract_next_dialogue(rest))
 
-    # def choice(self, items):
-    #     rich.print("choice", items, "end choice")
-    #     choice_token = items[0]
-    #     condition = None
-    #     idx = 1
-    #     if len(items) > 1 and isinstance(items[1], str):
-    #         condition = items[1]
-    #         idx += 1
-    #     next_dialogue = []
-    #     rich.print(items[idx:])
-    #     if len(items) > idx:
-    #         for stmt in items[idx:]:
-    #             if isinstance(stmt, Dialogue):
-    #                 next_dialogue.append(stmt)
-    #     choice = Choice(
-    #         line=choice_token.line,
-    #         choice=choice_token.text,
-    #         condition=condition,
-    #     )
-    #     return choice
+        choice = Choice(
+            line=choice.line,
+            choice=choice.text,
+            condition=condition,
+            next_dialogue=next_dialogue,
+        )
+        return choice
+
+    def extract_next_dialogue(self, items):
+        """
+        Extract dialogues that follow a choice up to next menu.
+        """
+        for item in items:
+            if isinstance(item, Dialogue):
+                yield item
+            elif isinstance(item, Menu):
+                break
+            elif item.data == "block":
+                yield from self.extract_next_dialogue(item.children)
 
     # def _find_context_at_line(self, items: list[Line], line: int):
     #     items = sorted(items, key=attrgetter("line"))
