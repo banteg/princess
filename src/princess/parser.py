@@ -30,7 +30,7 @@ def clean_script(path):
 grammar = Lark(
     r"""
     script: statement+
-    statement: label | menu | voice | dialogue
+    ?statement: label | menu | voice | dialogue
 
     label: "label" identifier ":" statement+
     menu: "menu:" choice+
