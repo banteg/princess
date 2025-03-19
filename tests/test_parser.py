@@ -1,5 +1,8 @@
 from pathlib import Path
-from princess.parser import Choice, Dialogue, grammar, ChoicesTransformer, clean_script
+
+import pytest
+
+from princess.parser import Choice, ChoicesTransformer, Dialogue, clean_script, grammar
 
 SCRIPT = clean_script("tests/data/micro_script.rpy")
 
@@ -87,3 +90,9 @@ def test_parse_choice_labels():
     parsed = get_parsed()
     for choice, parsed_choice in zip(CHOICES, parsed):
         assert choice.label == parsed_choice.label
+
+
+@pytest.mark.parametrize("index", range(len(CHOICES)))
+def test_parse_full_match(index):
+    parsed = get_parsed()
+    assert CHOICES[index] == parsed[index]
