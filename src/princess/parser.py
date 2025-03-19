@@ -163,12 +163,12 @@ class ChoicesTransformer(Transformer):
         return self.choices
 
 
-def parse_script(path: Path):
+def parse_script(path: Path, debug: bool = False):
     script = clean_script(path)
     result = grammar.parse(script)
-    # rich.print(result)
     transformed = ChoicesTransformer().transform(result)
-    rich.print(transformed)
+    if debug:
+        rich.print(transformed)
     return transformed
 
 
