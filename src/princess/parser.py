@@ -1,4 +1,5 @@
 import re
+from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,7 +85,7 @@ class ChoicesTransformer(Transformer):
     """
 
     def __init__(self):
-        self.current_label: str | None = None
+        self.labels: dict[int, str] = {}
         self.dialogue_buffer: list[Dialogue] = []
         self.choices: list[Choice] = []
         self.dialogue_stack: list[list[Dialogue]] = []
@@ -125,14 +126,15 @@ class ChoicesTransformer(Transformer):
         # self.dialogue_buffer.append(dialogue)  # ONLY append here!
         return dialogue
 
-    def label(self, items):
+    @v_args(meta=True)
+    def label(self, meta, items):
         label_name = items[0]
         statements = items[1:]
 
-        self.current_label = label_name
+        self.labels[meta.line] = label_name.text
         self.dialogue_buffer = []
 
-        return {"label": label_name, "statements": statements}
+        return {"label": label_name.text, "statements": statements}
 
     def menu(self, items):
         # Menu introduces choices; dialogue buffer holds dialogue before choices
@@ -163,7 +165,7 @@ class ChoicesTransformer(Transformer):
 
         choice = Choice(
             line=choice_token.line,
-            label=self.current_label,
+            label=None,  # will be filled in start
             choice=choice_token.text,
             condition=condition,
             prev_dialogue=old_buffer.copy(),
@@ -173,7 +175,14 @@ class ChoicesTransformer(Transformer):
 
         return choice
 
+    def find_label_at_line(self, line):
+        keys = sorted(self.labels.keys())
+        index = bisect_right(keys, line) - 1
+        return self.labels[keys[index]]
+
     def start(self, items):
+        for choice in self.choices:
+            choice.label = self.find_label_at_line(choice.line)
         return self.choices
 
 
