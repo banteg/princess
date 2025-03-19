@@ -204,50 +204,46 @@ class ChoicesTransformer(Transformer):
                 yield item
             elif isinstance(item, Menu):
                 break
+            elif isinstance(item, Label):
+                yield from self.extract_next_dialogue(item.children)
             elif item.data == "block":
                 yield from self.extract_next_dialogue(item.children)
 
-    # def _find_context_at_line(self, items: list[Line], line: int):
-    #     items = sorted(items, key=attrgetter("line"))
-    #     lines = [item.line for item in items]
-    #     index = bisect_right(lines, line) - 1
-    #     return items[index] if index != -1 else Line(line=1)
+    def _find_context_at_line(self, items: list[Line], line: int):
+        items = sorted(items, key=attrgetter("line"))
+        lines = [item.line for item in items]
+        index = bisect_right(lines, line) - 1
+        return items[index] if index != -1 else Line(line=1)
 
-    # def find_label_at_line(self, line) -> Label:
-    #     return self._find_context_at_line(self.labels, line)
+    def find_label_at_line(self, line) -> Label:
+        return self._find_context_at_line(self.labels, line)
 
-    # def find_menu_before_line(self, line) -> Menu:
-    #     return self._find_context_at_line(self.menus, line - 1)
+    def find_menu_before_line(self, line) -> Menu:
+        return self._find_context_at_line(self.menus, line - 1)
 
-    # def find_prev_dialogue(self, start, stop) -> list[Dialogue]:
-    #     """
-    #     Find dialogues between last label and menu start.
-    #     """
-    #     rich.print(f"find dialogue between {start} and {stop}")
-    #     dialogues = [d for d in self.dialogues if d.line > start and d.line < stop]
-    #     return dialogues
+    def find_prev_dialogue(self, start, stop) -> list[Dialogue]:
+        """
+        Find dialogues between last label and menu start.
+        """
+        dialogues = [d for d in self.dialogues if d.line > start and d.line < stop]
+        return dialogues
 
-    # def start(self, items):
-    #     """
-    #     After the whole tree has been transformed, we have all the labels, menus, and dialogue lines.
-    #     Now we traverse it again to add labels and previous dialogue to choices before returning them.
-    #     """
-    #     choices = []
-    #     for menu in self.menus:
-    #         for choice in menu.choices:
-    #             label = self.find_label_at_line(choice.line)
-    #             prev_menu = self.find_menu_before_line(menu.line)
-    #             choice.label = label.label
-    #             choice.prev_menu = prev_menu
-    #             choice.prev_dialogue = self.find_prev_dialogue(prev_menu.line, menu.line)
-    #             choices.append(choice)
-    #     rich.print("labels")
-    #     rich.print(self.labels)
-    #     rich.print("menus")
-    #     rich.print(self.menus)
-    #     rich.print("dialogue_lines")
-    #     rich.print(self.dialogues)
-    #     return choices
+    def start(self, items):
+        """
+        After the whole tree has been transformed, we have all the labels, menus, and dialogue lines.
+        Now we traverse it again to add labels and previous dialogue to choices before returning them.
+        """
+        choices = []
+        for menu in self.menus:
+            for choice in menu.choices:
+                label = self.find_label_at_line(choice.line)
+                prev_menu = self.find_menu_before_line(menu.line)
+                choice.label = label.label
+                choice.prev_menu = prev_menu
+                choice.prev_dialogue = self.find_prev_dialogue(prev_menu.line, menu.line)
+                choices.append(choice)
+
+        return sorted(choices, key=attrgetter("line"))
 
 
 def show_choices(choices: list[Choice]):
