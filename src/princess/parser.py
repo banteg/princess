@@ -4,7 +4,7 @@ from pathlib import Path
 
 import rich
 import typer
-from lark import Lark, Transformer
+from lark import Lark, Transformer, v_args
 
 from princess.constants import CHARACTERS
 from princess.utils.dialogue import clean_choice_for_tts
@@ -72,6 +72,12 @@ class Choice:
     next_dialogue: list[Dialogue]
 
 
+@dataclass
+class Text:
+    line: int
+    text: str
+
+
 class ChoicesTransformer(Transformer):
     """
     Extract choices along with relevant dialogue surrounding them.
@@ -83,24 +89,26 @@ class ChoicesTransformer(Transformer):
         self.choices: list[Choice] = []
         self.dialogue_stack: list[list[Dialogue]] = []
 
-    def identifier(self, items):
-        return items[0].value
+    @v_args(meta=True)
+    def identifier(self, meta, items):
+        return Text(line=meta.line, text=items[0].value)
 
     def condition(self, items):
         return items[0].value.strip()
 
-    def quoted(self, items):
-        return items[0]
+    @v_args(meta=True)
+    def quoted(self, meta, items):
+        return Text(line=meta.line, text=items[0].value)
 
     def voice(self, items):
-        return items[0].value
+        return items[0].text
 
     def dialogue(self, items):
         character, text_token = items[:2]
         dlg = Dialogue(
-            line=text_token.line,
-            character=character,
-            text=text_token.value,
+            line=character.line,
+            character=character.text,
+            text=text_token.text,
         )
         if self._filter_dialogue(dlg):
             self.dialogue_buffer.append(dlg)
@@ -156,7 +164,7 @@ class ChoicesTransformer(Transformer):
         choice = Choice(
             line=choice_token.line,
             label=self.current_label,
-            choice=choice_token.value,
+            choice=choice_token.text,
             condition=condition,
             prev_dialogue=old_buffer.copy(),
             next_dialogue=next_dialogue,

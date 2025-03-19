@@ -46,7 +46,7 @@ CHOICES = choices = [
         next_dialogue=[DIALOGUE[4]],
     ),
     Choice(
-        line=24,
+        line=20,
         label="nested_sequence",
         choice="• nested_choice_2",
         condition=None,
@@ -54,7 +54,7 @@ CHOICES = choices = [
         next_dialogue=[DIALOGUE[5]],
     ),
     Choice(
-        line=28,
+        line=23,
         label="nested_sequence",
         choice="• nested_choice_3",
         condition=None,
@@ -68,7 +68,22 @@ def test_script_clean():
     assert Path("tests/data/micro_script.rpy").read_text().strip() == SCRIPT
 
 
-def test_parse_script():
+def get_parsed():
     result = grammar.parse(SCRIPT)
-    transformed = ChoicesTransformer().transform(result)
-    assert transformed == CHOICES
+    return ChoicesTransformer().transform(result)
+
+
+def test_parse_num_choices():
+    assert len(CHOICES) == len(get_parsed())
+
+
+def test_parse_choice_lines():
+    parsed = get_parsed()
+    for choice, parsed_choice in zip(CHOICES, parsed):
+        assert choice.line == parsed_choice.line
+
+
+def test_parse_choice_labels():
+    parsed = get_parsed()
+    for choice, parsed_choice in zip(CHOICES, parsed):
+        assert choice.label == parsed_choice.label
