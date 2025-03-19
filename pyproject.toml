@@ -9,15 +9,18 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 dependencies = [
+    "lark>=1.2.2",
     "marimo>=0.11.20",
     "networkx>=3.4.2",
-    "parsimonious>=0.10.0",
     "polars>=1.25.2",
     "pydot>=3.0.4",
+    "pytest>=8.3.5",
     "rich>=13.9.4",
     "ruff>=0.11.0",
     "sqlite-utils>=3.38",
     "textual>=0.52.1",
+    "textual-dev>=1.7.0",
+    "typer>=0.15.2",
 ]
 
 [project.optional-dependencies]
