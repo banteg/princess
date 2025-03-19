@@ -101,8 +101,14 @@ class ChoicesTransformer(Transformer):
             character=character,
             text=text_token.value,
         )
-        self.dialogue_buffer.append(dlg)
+        if self._filter_dialogue(dlg):
+            self.dialogue_buffer.append(dlg)
         return dlg
+
+    def _filter_dialogue(self, dlg: Dialogue):
+        if re.search(r"^Note:", dlg.text) or "{fast}" in dlg.text:
+            return False
+        return True
 
     def voiced_dialogue(self, items):
         voice_path, dialogue = items
@@ -114,7 +120,6 @@ class ChoicesTransformer(Transformer):
         label_name = items[0]
         statements = items[1:]
 
-        # Reset buffer on new label
         self.current_label = label_name
         self.dialogue_buffer = []
 
@@ -169,6 +174,7 @@ def parse_script(path: Path, debug: bool = False):
     transformed = ChoicesTransformer().transform(result)
     if debug:
         rich.print(transformed)
+        rich.print(len(transformed), "choices extracted")
     return transformed
 
 
