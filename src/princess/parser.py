@@ -7,6 +7,7 @@ import typer
 from lark import Lark, Transformer
 
 from princess.constants import CHARACTERS
+from princess.utils.dialogue import clean_choice_for_tts
 
 
 def clean_script(path):
@@ -175,6 +176,21 @@ def parse_script(path: Path, debug: bool = False):
     if debug:
         rich.print(transformed)
         rich.print(len(transformed), "choices extracted")
+        rich.print("\n" * 5)
+        for enum, choice in enumerate(transformed, 1):
+            rich.print(f"[bold yellow]Choice {enum}:")
+            for line in choice.prev_dialogue[-3:]:
+                rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
+
+            rich.print(f"[dim]\[{choice.line}][/dim] [green]choice:[/] {choice.choice}")
+            pad = " " * (len(str(choice.line)) + 2)
+            rich.print(
+                f"{pad} [red]voiced:[/] {clean_choice_for_tts(choice.choice) or '[dim](silent)[/]'}"
+            )
+
+            for line in choice.next_dialogue[:3]:
+                rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
+            rich.print("\n")
     return transformed
 
 
