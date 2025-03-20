@@ -16,7 +16,8 @@ from princess.utils.dialogue import clean_choice_for_tts
 _app = typer.Typer(pretty_exceptions_show_locals=False)
 
 
-def clean_script(path):
+@_app.command("clean")
+def clean_script(path: Path, debug: bool = False):
     """
     Preprocess a script and only keep the lines we are interested in and our parser can handle.
     """
@@ -36,7 +37,10 @@ def clean_script(path):
                 yield line
 
     # the final newline is crucial
-    return "\n".join(clean_inner()) + "\n"
+    script = "\n".join(clean_inner()) + "\n"
+    if debug:
+        Path("clean_script.rpy").write_text(script)
+    return script
 
 
 class RenpyIndenter(Indenter):
@@ -263,7 +267,7 @@ def show_choices(choices: list[Choice]):
         rich.print("\n")
 
 
-@_app.command()
+@_app.command("parse")
 def parse_script(path: Path, debug: bool = False):
     print("=" * 120)
     script = clean_script(path)
