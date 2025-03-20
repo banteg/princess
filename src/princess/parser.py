@@ -112,27 +112,28 @@ grammar = Lark(
               | dialogue
               | if_block
               | jump
+              | pass
 
-    # conditionals
-    if_block: "if" condition ":" if_block_body (elif_block)* (else_block)?
-    elif_block: "elif" condition ":" if_block_body
-    else_block: "else" ":" if_block_body
+    # Modified conditionals to handle empty blocks
+    if_block: "if" condition ":" _NL block (elif_block)* (else_block)?
+    elif_block: "elif" condition ":" _NL block
+    else_block: "else" ":" _NL block
 
-    ?if_block_body: _NL block?
     condition: /[^\n:]+/
     jump: "jump" identifier _NL
+    pass: "pass" _NL
 
-    block: _INDENT statement* _DEDENT
+    block: _INDENT statement+ _DEDENT
 
-    label: "label" identifier ":" _NL block?
+    label: "label" identifier ":" _NL [block]
     menu: "menu" ":" _NL _INDENT choice+ _DEDENT
-    choice: quoted condition? ":" _NL block?
+    choice: quoted condition? ":" _NL [block]
 
     voiced_dialogue: voice _NL dialogue
-    dialogue: identifier quoted id_clause? _NL
+    dialogue: identifier quoted [id_clause] _NL
+    id_clause: /id\s\w+/
     voice: "voice" quoted
 
-    id_clause: /id\s\w+/
     identifier: /[a-zA-Z_]\w*/  # python identifier
     quoted: "\"" /[^\"]+/ "\""  # quoted string
 
