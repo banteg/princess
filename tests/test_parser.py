@@ -1,8 +1,13 @@
 from pathlib import Path
 
-import pytest
-
-from princess.parser import Dialogue, ChoiceResult, RenpyTransformer, clean_script, extract_choices, grammar
+from princess.parser import (
+    ChoiceResult,
+    Dialogue,
+    RenpyTransformer,
+    clean_script,
+    extract_choices,
+    grammar,
+)
 
 SCRIPT = clean_script("tests/data/micro_script.rpy")
 
@@ -65,29 +70,8 @@ def test_script_clean():
     assert Path("tests/data/micro_script.rpy").read_text().strip() == SCRIPT.strip()
 
 
-def get_parsed():
+def test_parse_full_match():
     raw_tree = grammar.parse(SCRIPT)
     ast_tree = RenpyTransformer().transform(raw_tree)
-    return extract_choices(ast_tree)
-
-
-def test_parse_num_choices():
-    assert len(CHOICES) == len(get_parsed())
-
-
-def test_parse_choice_lines():
-    parsed = get_parsed()
-    for choice, parsed_choice in zip(CHOICES, parsed):
-        assert choice.line == parsed_choice.line
-
-
-def test_parse_choice_labels():
-    parsed = get_parsed()
-    for choice, parsed_choice in zip(CHOICES, parsed):
-        assert choice.label == parsed_choice.label
-
-
-@pytest.mark.parametrize("index", range(len(CHOICES)))
-def test_parse_full_match(index):
-    parsed = get_parsed()
-    assert CHOICES[index] == parsed[index]
+    parsed = extract_choices(ast_tree)
+    assert CHOICES == parsed
