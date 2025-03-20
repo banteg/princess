@@ -51,17 +51,33 @@ def clean_script(path: Path, debug: bool = False):
         """,
         re.VERBOSE | re.IGNORECASE,
     )
+    if_re = re.compile(r"^\s*(if|elif|else)\b")
 
     lines = Path(path).read_text().splitlines()
 
+    def indent_of(line):
+        return len(line) - len(line.lstrip())
+
     # Now we simply yield the lines that match `keep_re` or `character_re`
     # (the latter was for lines like:  n "some dialogue")
-    def clean_inner():
-        for line in lines:
+    def select_lines(lines):
+        for i, line in enumerate(lines):
             if keep_re.search(line) or character_re.search(line):
                 yield line
 
-    script = "\n".join(clean_inner()) + "\n"
+    def fix_conditionals(lines):
+        # make sure we don't have empty conditional blocks
+        for i, line in enumerate(lines):
+            yield line
+            if if_re.search(line):
+                next_line = lines[i + 1]
+                if indent_of(next_line) <= indent_of(line):
+                    pass_line = " " * (indent_of(line) + 4) + "pass"
+                    yield pass_line
+
+    lines = list(select_lines(lines))
+    lines = list(fix_conditionals(lines))
+    script = "\n".join(lines) + "\n"
     if debug:
         Path("clean_script.rpy").write_text(script)
     return script
