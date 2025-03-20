@@ -8,20 +8,22 @@ It consists of several stages:
 """
 
 import re
-from bisect import bisect_right
 from dataclasses import dataclass
-from operator import attrgetter
 from pathlib import Path
 
 import rich
 import typer
-from lark import Discard, Lark, Transformer, Tree, v_args
+from lark import Discard, Lark, Transformer, v_args
 from lark.indenter import Indenter
 
 from princess.constants import CHARACTERS
-from princess.utils.dialogue import clean_choice_for_tts
 
 _app = typer.Typer(pretty_exceptions_show_locals=False)
+
+
+# Stage 1: Clean
+# Here we preprocess the script for our minimal grammar and only keep the lines we are interested in.
+# We also dedent the bodies of control blocks as if the conditions weren't there.
 
 
 @_app.command("clean")
@@ -91,6 +93,12 @@ def clean_script(path: Path, debug: bool = False):
     if debug:
         Path("clean_script.rpy").write_text(script)
     return script
+
+
+# Stage 2: Parse
+# Here we use a minimal Lark grammar to parse the script into a tree structure.
+# Then we transform it into a tree infused with metadata like line numbers.
+# We also merge voice and dialogue nodes into a unified node.
 
 
 class RenpyIndenter(Indenter):
@@ -219,164 +227,69 @@ class RenpyTransformer(Transformer):
         return items[0]
 
 
-# class ChoicesTransformer(Transformer):
-#     """
-#     Extract choices along with relevant dialogue surrounding them.
-#     """
-
-#     def __init__(self):
-#         self.labels: list[Label] = []
-#         self.dialogues: list[Dialogue] = []
-#         self.menus: list[Menu] = []
-
-#     @v_args(meta=True)
-#     def identifier(self, meta, items):
-#         return Text(line=meta.line, text=items[0].value)
-
-#     def condition(self, items):
-#         return items[0].value.strip()
-
-#     @v_args(meta=True)
-#     def quoted(self, meta, items):
-#         return Text(line=meta.line, text=items[0].value)
-
-#     def voice(self, items):
-#         return items[0].text
-
-#     def dialogue(self, items):
-#         character, text_token = items[:2]
-#         dlg = Dialogue(
-#             line=character.line,
-#             character=character.text,
-#             text=text_token.text,
-#         )
-#         return dlg
-
-#     def _filter_dialogue(self, dlg: Dialogue):
-#         if re.search(r"^Note:", dlg.text) or "{fast}" in dlg.text:
-#             return False
-#         return True
-
-#     def voiced_dialogue(self, items):
-#         voice_path, dialogue = items
-#         dialogue.voice = voice_path
-#         if self._filter_dialogue(dialogue):
-#             self.dialogues.append(dialogue)
-#         return dialogue
-
-#     @v_args(meta=True)
-#     def label(self, meta, items):
-#         label_name = items[0]
-#         label = Label(line=label_name.line, label=label_name.text)
-#         self.labels.append(label)
-#         return Tree("label", items)
-
-#     @v_args(meta=True)
-#     def menu(self, meta, items):
-#         menu = Menu(line=meta.line, choices=items)
-#         self.menus.append(menu)
-#         return Tree("menu", items)
-
-#     def choice(self, items):
-#         choice, *rest = items
-#         condition = None
-#         next_dialogue = []
-#         if rest and isinstance(rest[0], str):
-#             condition = rest[0]
-#             rest = rest[1:]
-#         if rest:
-#             next_dialogue = list(self.extract_next_dialogue(rest))
-
-#         choice = Choice(
-#             line=choice.line,
-#             choice=choice.text,
-#             condition=condition,
-#             next_dialogue=next_dialogue,
-#         )
-#         return choice
-
-#     def extract_next_dialogue(self, items):
-#         """
-#         Extract dialogues that follow a choice up to next menu.
-#         """
-#         for item in items:
-#             if isinstance(item, Dialogue):
-#                 yield item
-#             elif isinstance(item, Menu):
-#                 break
-#             elif item.data == "label":
-#                 yield from self.extract_next_dialogue(item.children[1:])
-#             elif item.data == "block":
-#                 yield from self.extract_next_dialogue(item.children)
-
-#     def _find_context_at_line(self, items: list[Line], line: int):
-#         items = sorted(items, key=attrgetter("line"))
-#         lines = [item.line for item in items]
-#         index = bisect_right(lines, line) - 1
-#         return items[index] if index != -1 else Line(line=1)
-
-#     def find_label_at_line(self, line) -> Label:
-#         return self._find_context_at_line(self.labels, line)
-
-#     def find_menu_before_line(self, line) -> Menu:
-#         return self._find_context_at_line(self.menus, line - 1)
-
-#     def find_prev_dialogue(self, start, stop) -> list[Dialogue]:
-#         """
-#         Find dialogues between last label and menu start.
-#         """
-#         dialogues = [d for d in self.dialogues if d.line > start and d.line < stop]
-#         return dialogues
-
-#     def start(self, items):
-#         """
-#         After the whole tree has been transformed, we have all the labels, menus, and dialogue lines.
-#         Now we traverse it again to add labels and previous dialogue to choices before returning them.
-#         """
-#         choices = []
-#         for menu in self.menus:
-#             for choice in menu.choices:
-#                 label = self.find_label_at_line(choice.line)
-#                 prev_menu = self.find_menu_before_line(menu.line)
-#                 choice.label = label.label
-#                 choice.prev_menu = prev_menu
-#                 choice.prev_dialogue = self.find_prev_dialogue(prev_menu.line, menu.line)
-#                 choices.append(choice)
-
-#         return sorted(choices, key=attrgetter("line"))
+# Stage 3: Extract choices
+# Here we extract choices and their surrounding dialogue by traversing the tree.
+# The resulting list can be used for further work on text-to-speech generation.
 
 
-# def show_choices(choices: list[Choice]):
-#     for enum, choice in enumerate(choices, 1):
-#         rich.print(f"[bold yellow]Choice {enum}:")
-#         for line in choice.prev_dialogue[-3:]:
-#             rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
+@dataclass
+class ChoiceResult(Line):
+    choice: str
+    previous: list[str]
+    subsequent: list[str]
 
-#         rich.print(f"[dim]\[{choice.line}][/dim] [green]choice:[/] {choice.choice}")
-#         pad = " " * (len(str(choice.line)) + 2)
-#         rich.print(
-#             f"{pad} [red]voiced:[/] {clean_choice_for_tts(choice.choice) or '[dim](silent)[/]'}"
-#         )
 
-#         for line in choice.next_dialogue[:3]:
-#             rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
-#         rich.print("\n")
+def extract_choices(tree) -> list[ChoiceResult]:
+    def collect_until_menu(node):
+        for sub in node.children:
+            match sub:
+                case Dialogue():
+                    yield sub.dialogue
+                case Label():
+                    yield from collect_until_menu(sub)
+                case Menu():
+                    return
+
+    def walk_tree(node, prev=None):
+        if prev is None:
+            prev = []
+        for sub in node.children:
+            match sub:
+                case Dialogue():
+                    prev.append(sub.dialogue)
+                case Label() | Menu():
+                    yield from walk_tree(sub, prev[:])
+                case Choice():
+                    succ = list(collect_until_menu(sub))
+                    yield ChoiceResult(
+                        line=sub.line,
+                        choice=sub.choice,
+                        previous=prev[:],
+                        subsequent=succ,
+                    )
+                    yield from walk_tree(sub, prev[:])
+
+    return list(walk_tree(tree))
 
 
 @_app.command("parse")
 def parse_script(path: Path, debug: bool = False):
     print("=" * 120)
     script = clean_script(path)
-    tree = grammar.parse(script)
-    ast_tree = RenpyTransformer().transform(tree)
-    rich.print(ast_tree)
-    # transformed = ChoicesTransformer().transform(result)
-    # if debug:
-    #     rich.print(transformed)
-    #     rich.print(len(transformed), "choices extracted")
-    #     rich.print("\n")
-    #     show_choices(transformed)
-    # return transformed
+    raw_tree = grammar.parse(script)
+    ast_tree = RenpyTransformer().transform(raw_tree)
+    if debug:
+        rich.print(ast_tree)
+    return ast_tree
+
+
+@_app.command("choices")
+def extract_choices_from_script(path: Path, debug: bool = False):
+    ast_tree = parse_script(path, debug)
+    choices = extract_choices(ast_tree)
+    if debug:
+        rich.print(choices)
+    return choices
 
 
 if __name__ == "__main__":
