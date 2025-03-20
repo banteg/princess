@@ -224,7 +224,7 @@ class RenpyTransformer(Transformer):
         return items
 
     def start(self, items):
-        return items[0]
+        return items
 
 
 # Stage 3: Extract choices
@@ -253,7 +253,8 @@ def extract_choices(tree) -> list[ChoiceResult]:
     def walk_tree(node, prev=None):
         if prev is None:
             prev = []
-        for sub in node.children:
+        children = node if isinstance(node, list) else node.children
+        for sub in children:
             match sub:
                 case Dialogue():
                     prev.append(sub.dialogue)
