@@ -30,66 +30,37 @@ _app = typer.Typer(pretty_exceptions_show_locals=False)
 @_app.command("clean")
 def clean_script(path: Path, debug: bool = False):
     """
-    Preprocess a script and only keep the lines we are interested in and our parser can handle.
-    This version removes if/elif/else lines and dedents their bodies as if the conditions weren't there.
+    Preprocess a script and keep only the lines we are interested in (labels, menus, dialogue,
+    if/elif/else blocks, jumps, etc.), preserving their indentation so our grammar can parse them.
     """
     character_re = re.compile(r"^\s*(" + "|".join(CHARACTERS) + r")\s+\"")
+
+    # This regex tries to capture the typical Ren'Py lines we need:
+    keep_re = re.compile(
+        r""" ^
+        (\s*
+            (
+                label\s+[a-z][a-z0-9_]*:  # label start
+                |menu\s*:\s*              # choice menu
+                |(if|elif|else)\b.*:\s*   # conditional blocks
+                |jump\s+\w+               # jump label
+                |voice\s+"[^"]+"          # voice "some_file"
+                |"(\{i\})?•              # choice bullet
+            )
+        )
+        """,
+        re.VERBOSE | re.IGNORECASE,
+    )
+
     lines = Path(path).read_text().splitlines()
 
+    # Now we simply yield the lines that match `keep_re` or `character_re`
+    # (the latter was for lines like:  n "some dialogue")
     def clean_inner():
-        # stack holds tuples of (block_indent, removal_amount)
-        stack = []
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            # Determine the current line's indent (number of leading spaces)
-            indent_match = re.match(r"^(\s*)", line)
-            current_indent = len(indent_match.group(1)) if indent_match else 0
+        for line in lines:
+            if keep_re.search(line) or character_re.search(line):
+                yield line
 
-            # Pop out of any control block when the current line is no longer as indented.
-            while stack and current_indent <= stack[-1][0]:
-                stack.pop()
-
-            # Check if the line is an if/elif/else statement (a control line)
-            if re.match(r"^\s*(if|elif|else)\b.*:\s*$", line):
-                # Look ahead to the next non-empty line to determine the removal indent.
-                removal = 0
-                j = i + 1
-                while j < len(lines):
-                    next_line = lines[j]
-                    if next_line.strip() == "":
-                        j += 1
-                        continue
-                    next_indent_match = re.match(r"^(\s*)", next_line)
-                    next_indent = len(next_indent_match.group(1)) if next_indent_match else 0
-                    if next_indent > current_indent:
-                        removal = next_indent - current_indent
-                    break
-                if removal > 0:
-                    stack.append((current_indent, removal))
-                # Do not yield the if/elif/else line; skip it.
-                i += 1
-                continue
-            else:
-                # Compute total removal amount from all active control blocks.
-                total_removal = sum(rem for _, rem in stack)
-                # Remove the computed indentation from the line.
-                if line.startswith(" " * total_removal):
-                    new_line = line[total_removal:]
-                else:
-                    new_line = line.lstrip()
-                # Only yield lines that are part of the "interesting" parts of the script.
-                if (
-                    re.search(r"^\s*label\s[a-z][a-z0-9_]*:", new_line)
-                    or re.search(r"^\s*menu:", new_line)
-                    or re.search(r'^\s*"(\{i\})?•', new_line)
-                    or re.search(r'^\s*voice\s"[^"]+"', new_line)
-                    or character_re.search(new_line)
-                ):
-                    yield new_line
-            i += 1
-
-    # The final newline is crucial.
     script = "\n".join(clean_inner()) + "\n"
     if debug:
         Path("clean_script.rpy").write_text(script)
