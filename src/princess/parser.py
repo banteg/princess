@@ -282,7 +282,6 @@ def extract_choices(tree) -> list[ChoiceResult]:
 
 @_app.command("parse")
 def parse_script(path: Path, debug: bool = False):
-    print("=" * 120)
     script = clean_script(path)
     raw_tree = grammar.parse(script)
     ast_tree = RenpyTransformer().transform(raw_tree)
