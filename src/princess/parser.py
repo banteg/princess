@@ -117,14 +117,23 @@ class RenpyIndenter(Indenter):
 
 grammar = Lark(
     r"""
-    %import common.WS_INLINE
-    %ignore WS_INLINE
-
-    _NL: /\r?\n[\t ]*/  # MUST match line break as well as indentation
-    %declare _INDENT _DEDENT
-
     start: statement* _NL?
-    ?statement: label | menu | voiced_dialogue | dialogue
+
+    ?statement: label
+              | menu
+              | voiced_dialogue
+              | dialogue
+              | if_block
+              | jump
+
+    # conditionals
+    if_block: "if" condition ":" if_block_body (elif_block)* (else_block)?
+    elif_block: "elif" condition ":" if_block_body
+    else_block: "else" ":" if_block_body
+
+    ?if_block_body: _NL block?
+    condition: /[^\n:]+/
+    jump: "jump" identifier _NL
 
     block: _INDENT statement* _DEDENT
 
@@ -135,10 +144,14 @@ grammar = Lark(
     voiced_dialogue: voice _NL dialogue
     dialogue: identifier quoted ["id" identifier] _NL
     voice: "voice" quoted
-    condition: "if" /[^\n:]+/    # if statement
 
     identifier: /[a-zA-Z_]\w*/  # python identifier
     quoted: "\"" /[^\"]+/ "\""  # quoted string
+
+    _NL: /\r?\n[\t ]*/  # MUST match line break as well as indentation
+    %declare _INDENT _DEDENT
+    %import common.WS_INLINE
+    %ignore WS_INLINE
     """,
     parser="lalr",
     postlex=RenpyIndenter(),
