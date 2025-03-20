@@ -15,8 +15,9 @@ import rich
 import typer
 from lark import Discard, Lark, Transformer, v_args
 from lark.indenter import Indenter
-
+from princess.game import get_game_path, walk_script_files
 from princess.constants import CHARACTERS
+from collections import Counter
 
 _app = typer.Typer(pretty_exceptions_show_locals=False)
 
@@ -299,6 +300,29 @@ def extract_choices_from_script(path: Path, debug: bool = False):
         rich.print(choices)
         rich.print(f"Extracted {len(choices)} choices")
     return choices
+
+
+@_app.command("all")
+def extract_all_choices(debug: bool = False):
+    all_choices = []
+    stats = Counter()
+    game_path = get_game_path()
+    for path in walk_script_files(game_path):
+        print(path)
+        try:
+            ast_tree = parse_script(path)
+            choices = extract_choices(ast_tree)
+            if debug:
+                rich.print(f"Extracted {len(choices)} choices from {path.relative_to(game_path)}\n")
+            all_choices.extend(choices)
+            stats["success"] += 1
+        except Exception as e:
+            print(f"Error parsing {path.relative_to(game_path)}: {e}\n")
+            stats["errors"] += 1
+    if debug:
+        rich.print(f"Extracted {len(all_choices)} choices from all scripts")
+        rich.print(stats, sum(stats.values()))
+    return all_choices
 
 
 if __name__ == "__main__":
