@@ -216,7 +216,7 @@ class RenpyTransformer(Transformer):
         return Label(
             line=meta.line,
             label=items[0].value,
-            children=items[1],
+            children=items[1] if len(items) > 1 else [],
         )
 
     @v_args(meta=True)
@@ -297,6 +297,7 @@ def extract_choices_from_script(path: Path, debug: bool = False):
     choices = extract_choices(ast_tree)
     if debug:
         rich.print(choices)
+        rich.print(f"Extracted {len(choices)} choices")
     return choices
 
 
