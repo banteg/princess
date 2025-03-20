@@ -123,7 +123,7 @@ grammar = Lark(
     _NL: /\r?\n[\t ]*/  # MUST match line break as well as indentation
     %declare _INDENT _DEDENT
 
-    start: statement*
+    start: statement* _NL?
     ?statement: label | menu | voiced_dialogue | dialogue
 
     block: _INDENT statement* _DEDENT
