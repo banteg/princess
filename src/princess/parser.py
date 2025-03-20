@@ -238,8 +238,8 @@ class RenpyTransformer(Transformer):
 @dataclass
 class ChoiceResult(Line):
     choice: str
-    previous: list[str]
-    subsequent: list[str]
+    previous: list[Dialogue]
+    subsequent: list[Dialogue]
     label: str | None = None
 
 
@@ -260,7 +260,7 @@ def extract_choices(tree) -> list[ChoiceResult]:
         for sub in node.children:
             match sub:
                 case Dialogue():
-                    prev.append(sub.dialogue)
+                    prev.append(sub)
                 case Label():
                     label = sub.label
                     yield from walk_tree(sub, prev[:], label)
