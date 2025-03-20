@@ -2,78 +2,73 @@ from pathlib import Path
 
 import pytest
 
-from princess.parser import Choice, ChoicesTransformer, Dialogue, clean_script, grammar
+from princess.parser import Dialogue, ChoiceResult, RenpyTransformer, clean_script, extract_choices, grammar
 
 SCRIPT = clean_script("tests/data/micro_script.rpy")
 
 DIALOGUE = [
-    Dialogue(line=3, character="n", text="narrator_line_1", voice="narrator_audio_1"),
-    Dialogue(line=5, character="n", text="narrator_line_2", voice="narrator_audio_2"),
-    Dialogue(line=11, character="n", text="narrator_line_3", voice="narrator_audio_3"),
-    Dialogue(line=15, character="n", text="narrator_line_4", voice="narrator_audio_4"),
-    Dialogue(line=19, character="n", text="narrator_line_5", voice="narrator_audio_5"),
-    Dialogue(line=22, character="n", text="narrator_line_6", voice="narrator_audio_6"),
+    Dialogue(line=3, character="n", dialogue="narrator_line_1", voice="narrator_audio_1"),
+    Dialogue(line=5, character="n", dialogue="narrator_line_2", voice="narrator_audio_2"),
+    Dialogue(line=11, character="n", dialogue="narrator_line_3", voice="narrator_audio_3"),
+    Dialogue(line=15, character="n", dialogue="narrator_line_4", voice="narrator_audio_4"),
+    Dialogue(line=19, character="n", dialogue="narrator_line_5", voice="narrator_audio_5"),
+    Dialogue(line=22, character="n", dialogue="narrator_line_6", voice="narrator_audio_6"),
 ]
 
-CHOICES = choices = [
-    Choice(
+CHOICES = [
+    ChoiceResult(
         line=8,
         label="main_dialogue",
         choice="• choice_1",
-        condition="condition_1 == False",
-        prev_dialogue=[DIALOGUE[0], DIALOGUE[1]],
-        next_dialogue=[],
+        previous=[DIALOGUE[0], DIALOGUE[1]],
+        subsequent=[],
     ),
-    Choice(
+    ChoiceResult(
         line=9,
         label="main_dialogue",
         choice="• choice_2",
-        condition="condition_2 == False",
-        prev_dialogue=[DIALOGUE[0], DIALOGUE[1]],
-        next_dialogue=[DIALOGUE[2]],
+        previous=[DIALOGUE[0], DIALOGUE[1]],
+        subsequent=[DIALOGUE[2]],
     ),
-    Choice(
+    ChoiceResult(
         line=12,
         label="main_dialogue",
         choice="• choice_3",
-        condition="condition_3 == False",
-        prev_dialogue=[DIALOGUE[0], DIALOGUE[1]],
-        next_dialogue=[DIALOGUE[3]],
+        previous=[DIALOGUE[0], DIALOGUE[1]],
+        subsequent=[DIALOGUE[3]],
     ),
-    Choice(
+    ChoiceResult(
         line=17,
         label="nested_sequence",
         choice="• nested_choice_1",
-        condition="can_proceed",
-        prev_dialogue=[DIALOGUE[3]],
-        next_dialogue=[DIALOGUE[4]],
+        previous=[DIALOGUE[0], DIALOGUE[1], DIALOGUE[3]],
+        subsequent=[DIALOGUE[4]],
     ),
-    Choice(
+    ChoiceResult(
         line=20,
         label="nested_sequence",
         choice="• nested_choice_2",
-        condition=None,
-        prev_dialogue=[DIALOGUE[3]],
-        next_dialogue=[DIALOGUE[5]],
+        previous=[DIALOGUE[0], DIALOGUE[1], DIALOGUE[3]],
+        subsequent=[DIALOGUE[5]],
     ),
-    Choice(
+    ChoiceResult(
         line=23,
         label="nested_sequence",
         choice="• nested_choice_3",
-        condition=None,
-        prev_dialogue=[DIALOGUE[3]],
-        next_dialogue=[],
+        previous=[DIALOGUE[0], DIALOGUE[1], DIALOGUE[3]],
+        subsequent=[],
     ),
 ]
 
 
 def test_script_clean():
-    assert Path("tests/data/micro_script.rpy").read_text().strip() == SCRIPT
+    assert Path("tests/data/micro_script.rpy").read_text().strip() == SCRIPT.strip()
 
 
 def get_parsed():
-    result = grammar.parse(SCRIPT)
-    return ChoicesTransformer().transform(result)
+    raw_tree = grammar.parse(SCRIPT)
+    ast_tree = RenpyTransformer().transform(raw_tree)
+    return extract_choices(ast_tree)
 
 
 def test_parse_num_choices():
