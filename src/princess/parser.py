@@ -240,6 +240,7 @@ class ChoiceResult(Line):
     choice: str
     previous: list[str]
     subsequent: list[str]
+    label: str | None = None
 
 
 def extract_choices(tree) -> list[ChoiceResult]:
@@ -253,15 +254,18 @@ def extract_choices(tree) -> list[ChoiceResult]:
                 case Menu():
                     return
 
-    def walk_tree(node, prev=None):
+    def walk_tree(node, prev=None, label=None):
         if prev is None:
             prev = []
         for sub in node.children:
             match sub:
                 case Dialogue():
                     prev.append(sub.dialogue)
-                case Label() | Menu():
-                    yield from walk_tree(sub, prev[:])
+                case Label():
+                    label = sub.label
+                    yield from walk_tree(sub, prev[:], label)
+                case Menu():
+                    yield from walk_tree(sub, prev[:], label)
                 case Choice():
                     succ = list(collect_until_menu(sub))
                     yield ChoiceResult(
@@ -269,8 +273,9 @@ def extract_choices(tree) -> list[ChoiceResult]:
                         choice=sub.choice,
                         previous=prev[:],
                         subsequent=succ,
+                        label=label,
                     )
-                    yield from walk_tree(sub, prev[:])
+                    yield from walk_tree(sub, prev[:], label)
 
     return list(walk_tree(tree))
 
