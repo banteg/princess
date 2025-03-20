@@ -51,7 +51,7 @@ def clean_script(path: Path, debug: bool = False):
         """,
         re.VERBOSE | re.IGNORECASE,
     )
-    if_re = re.compile(r"^\s*(if|elif|else)\b")
+    if_re = re.compile(r"(\s*)(if|elif|else)\b(.*):")
 
     lines = Path(path).read_text().splitlines()
 
@@ -68,18 +68,20 @@ def clean_script(path: Path, debug: bool = False):
     def fix_conditionals(lines):
         # make sure we don't have empty conditional blocks
         for i, line in enumerate(lines):
-            yield line
             if if_re.search(line):
+                # replace conditions with if:, elif:, else:
+                yield if_re.sub(r"\1\2:", line)
                 next_line = lines[i + 1]
                 if indent_of(next_line) <= indent_of(line):
                     pass_line = " " * (indent_of(line) + 4) + "pass"
                     yield pass_line
+            else:
+                yield line
 
     lines = list(select_lines(lines))
     lines = list(fix_conditionals(lines))
     script = "\n".join(lines) + "\n"
-    if debug:
-        Path("clean_script.rpy").write_text(script)
+    Path("clean_script.rpy").write_text(script)
     return script
 
 
