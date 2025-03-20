@@ -250,8 +250,8 @@ class ChoicesTransformer(Transformer):
                 yield item
             elif isinstance(item, Menu):
                 break
-            elif isinstance(item, Label):
-                yield from self.extract_next_dialogue(item.children)
+            elif item.data == "label":
+                yield from self.extract_next_dialogue(item.children[1:])
             elif item.data == "block":
                 yield from self.extract_next_dialogue(item.children)
 
