@@ -275,7 +275,8 @@ def extract_choices(tree) -> list[ChoiceResult]:
                         subsequent=succ,
                         label=label,
                     )
-                    yield from walk_tree(sub, prev[:], label)
+                    post_prev = prev[:] + [Choice(line=sub.line, choice=sub.choice, children=[])]
+                    yield from walk_tree(sub, post_prev, label)
 
     return list(walk_tree(tree))
 

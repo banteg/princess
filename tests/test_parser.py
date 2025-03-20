@@ -3,6 +3,7 @@ from pathlib import Path
 from princess.parser import (
     ChoiceResult,
     Dialogue,
+    Choice,
     RenpyTransformer,
     clean_script,
     extract_choices,
@@ -18,6 +19,9 @@ DIALOGUE = [
     Dialogue(line=15, character="n", dialogue="narrator_line_4", voice="narrator_audio_4"),
     Dialogue(line=19, character="n", dialogue="narrator_line_5", voice="narrator_audio_5"),
     Dialogue(line=22, character="n", dialogue="narrator_line_6", voice="narrator_audio_6"),
+]
+CHOSEN = [
+    Choice(line=12, choice="• choice_3", children=[]),
 ]
 
 CHOICES = [
@@ -46,21 +50,21 @@ CHOICES = [
         line=17,
         label="nested_sequence",
         choice="• nested_choice_1",
-        previous=[DIALOGUE[0], DIALOGUE[1], DIALOGUE[3]],
+        previous=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
         subsequent=[DIALOGUE[4]],
     ),
     ChoiceResult(
         line=20,
         label="nested_sequence",
         choice="• nested_choice_2",
-        previous=[DIALOGUE[0], DIALOGUE[1], DIALOGUE[3]],
+        previous=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
         subsequent=[DIALOGUE[5]],
     ),
     ChoiceResult(
         line=23,
         label="nested_sequence",
         choice="• nested_choice_3",
-        previous=[DIALOGUE[0], DIALOGUE[1], DIALOGUE[3]],
+        previous=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
         subsequent=[],
     ),
 ]
