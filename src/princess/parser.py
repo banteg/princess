@@ -152,18 +152,21 @@ class Dialogue(Line):
 @dataclass
 class Choice(Line):
     choice: str
+    children: list
 
 
 @dataclass
 class Label(Line):
     label: str
+    children: list
+
+
+@dataclass
+class Menu(Line):
+    children: list[Choice]
 
 
 class RenpyTransformer(Transformer):
-    """
-    Pre-process the parsed tree into a more useful form.
-    """
-
     def quoted(self, items):
         return items[0]
 
@@ -187,12 +190,21 @@ class RenpyTransformer(Transformer):
 
     @v_args(meta=True)
     def choice(self, meta, items):
-        choice = Choice(line=meta.line, choice=items[0].value)
-        return Tree("choice", [choice] + items[1:])
+        return Choice(line=meta.line, choice=items[0].value, children=items[1:])
 
     @v_args(meta=True)
     def label(self, meta, items):
-        return Tree("label", [Label(line=meta.line, label=items[0].value)] + items[1:])
+        return Label(line=meta.line, label=items[0].value, children=items[1:])
+
+    @v_args(meta=True)
+    def menu(self, meta, items):
+        return Menu(line=meta.line, children=items)
+
+    def block(self, items):
+        return items
+
+    def start(self, items):
+        return items[0]
 
 
 # class ChoicesTransformer(Transformer):
