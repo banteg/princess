@@ -117,7 +117,7 @@ grammar = Lark(
     start: statement*
     ?statement: label | menu | voiced_dialogue | dialogue
 
-    ?block: _INDENT statement* _DEDENT
+    block: _INDENT statement* _DEDENT
 
     label: "label" identifier ":" _NL block?
     menu: "menu" ":" _NL _INDENT choice+ _DEDENT
@@ -175,7 +175,11 @@ class RenpyTransformer(Transformer):
 
     @v_args(meta=True)
     def dialogue(self, meta, items):
-        return Dialogue(character=items[0].value, dialogue=items[1].value, line=meta.line)
+        return Dialogue(
+            character=items[0].value,
+            dialogue=items[1].value,
+            line=meta.line,
+        )
 
     def voice(self, items):
         return items[0]
@@ -190,11 +194,19 @@ class RenpyTransformer(Transformer):
 
     @v_args(meta=True)
     def choice(self, meta, items):
-        return Choice(line=meta.line, choice=items[0].value, children=items[1:])
+        return Choice(
+            line=meta.line,
+            choice=items[0].value,
+            children=items[1] if len(items) > 1 else [],
+        )
 
     @v_args(meta=True)
     def label(self, meta, items):
-        return Label(line=meta.line, label=items[0].value, children=items[1])
+        return Label(
+            line=meta.line,
+            label=items[0].value,
+            children=items[1],
+        )
 
     @v_args(meta=True)
     def menu(self, meta, items):
