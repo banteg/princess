@@ -7,17 +7,16 @@ It consists of several stages:
 3. Extract: traverse the tree top-down to extract the player choices and surrounding dialogue.
 """
 
-from operator import attrgetter
 import re
 from bisect import bisect_right
 from dataclasses import dataclass
+from operator import attrgetter
 from pathlib import Path
 
 import rich
 import typer
-from lark import Lark, Transformer, v_args, Tree
+from lark import Discard, Lark, Transformer, Tree, v_args
 from lark.indenter import Indenter
-import sys
 
 from princess.constants import CHARACTERS
 from princess.utils.dialogue import clean_choice_for_tts
@@ -118,7 +117,7 @@ grammar = Lark(
     start: statement*
     ?statement: label | menu | voiced_dialogue | dialogue
 
-    block: _INDENT statement* _DEDENT
+    ?block: _INDENT statement* _DEDENT
 
     label: "label" identifier ":" _NL block?
     menu: "menu" ":" _NL _INDENT choice+ _DEDENT
@@ -146,22 +145,13 @@ class Line:
 @dataclass
 class Dialogue(Line):
     character: str
-    text: str
+    dialogue: str
     voice: str | None = None
 
 
 @dataclass
 class Choice(Line):
     choice: str
-    condition: str
-    label: str | None = None
-    prev_dialogue: list[Dialogue] | None = None
-    next_dialogue: list[Dialogue] | None = None
-
-
-@dataclass
-class Menu(Line):
-    choices: list[Choice]
 
 
 @dataclass
@@ -169,168 +159,200 @@ class Label(Line):
     label: str
 
 
-@dataclass
-class Text(Line):
-    text: str
-
-
-class ChoicesTransformer(Transformer):
+class RenpyTransformer(Transformer):
     """
-    Extract choices along with relevant dialogue surrounding them.
+    Pre-process the parsed tree into a more useful form.
     """
 
-    def __init__(self):
-        self.labels: list[Label] = []
-        self.dialogues: list[Dialogue] = []
-        self.menus: list[Menu] = []
+    def quoted(self, items):
+        return items[0]
+
+    def identifier(self, items):
+        return items[0]
 
     @v_args(meta=True)
-    def identifier(self, meta, items):
-        return Text(line=meta.line, text=items[0].value)
-
-    def condition(self, items):
-        return items[0].value.strip()
-
-    @v_args(meta=True)
-    def quoted(self, meta, items):
-        return Text(line=meta.line, text=items[0].value)
+    def dialogue(self, meta, items):
+        return Dialogue(character=items[0].value, dialogue=items[1].value, line=meta.line)
 
     def voice(self, items):
-        return items[0].text
-
-    def dialogue(self, items):
-        character, text_token = items[:2]
-        dlg = Dialogue(
-            line=character.line,
-            character=character.text,
-            text=text_token.text,
-        )
-        return dlg
-
-    def _filter_dialogue(self, dlg: Dialogue):
-        if re.search(r"^Note:", dlg.text) or "{fast}" in dlg.text:
-            return False
-        return True
+        return items[0]
 
     def voiced_dialogue(self, items):
-        voice_path, dialogue = items
-        dialogue.voice = voice_path
-        if self._filter_dialogue(dialogue):
-            self.dialogues.append(dialogue)
+        dialogue = items[1]
+        dialogue.voice = items[0].value
         return dialogue
+
+    def condition(self, items):
+        return Discard
+
+    @v_args(meta=True)
+    def choice(self, meta, items):
+        choice = Choice(line=meta.line, choice=items[0].value)
+        return Tree("choice", [choice] + items[1:])
 
     @v_args(meta=True)
     def label(self, meta, items):
-        label_name = items[0]
-        label = Label(line=label_name.line, label=label_name.text)
-        self.labels.append(label)
-        return Tree("label", items)
-
-    @v_args(meta=True)
-    def menu(self, meta, items):
-        menu = Menu(line=meta.line, choices=items)
-        self.menus.append(menu)
-        return Tree("menu", items)
-
-    def choice(self, items):
-        choice, *rest = items
-        condition = None
-        next_dialogue = []
-        if rest and isinstance(rest[0], str):
-            condition = rest[0]
-            rest = rest[1:]
-        if rest:
-            next_dialogue = list(self.extract_next_dialogue(rest))
-
-        choice = Choice(
-            line=choice.line,
-            choice=choice.text,
-            condition=condition,
-            next_dialogue=next_dialogue,
-        )
-        return choice
-
-    def extract_next_dialogue(self, items):
-        """
-        Extract dialogues that follow a choice up to next menu.
-        """
-        for item in items:
-            if isinstance(item, Dialogue):
-                yield item
-            elif isinstance(item, Menu):
-                break
-            elif item.data == "label":
-                yield from self.extract_next_dialogue(item.children[1:])
-            elif item.data == "block":
-                yield from self.extract_next_dialogue(item.children)
-
-    def _find_context_at_line(self, items: list[Line], line: int):
-        items = sorted(items, key=attrgetter("line"))
-        lines = [item.line for item in items]
-        index = bisect_right(lines, line) - 1
-        return items[index] if index != -1 else Line(line=1)
-
-    def find_label_at_line(self, line) -> Label:
-        return self._find_context_at_line(self.labels, line)
-
-    def find_menu_before_line(self, line) -> Menu:
-        return self._find_context_at_line(self.menus, line - 1)
-
-    def find_prev_dialogue(self, start, stop) -> list[Dialogue]:
-        """
-        Find dialogues between last label and menu start.
-        """
-        dialogues = [d for d in self.dialogues if d.line > start and d.line < stop]
-        return dialogues
-
-    def start(self, items):
-        """
-        After the whole tree has been transformed, we have all the labels, menus, and dialogue lines.
-        Now we traverse it again to add labels and previous dialogue to choices before returning them.
-        """
-        choices = []
-        for menu in self.menus:
-            for choice in menu.choices:
-                label = self.find_label_at_line(choice.line)
-                prev_menu = self.find_menu_before_line(menu.line)
-                choice.label = label.label
-                choice.prev_menu = prev_menu
-                choice.prev_dialogue = self.find_prev_dialogue(prev_menu.line, menu.line)
-                choices.append(choice)
-
-        return sorted(choices, key=attrgetter("line"))
+        return Tree("label", [Label(line=meta.line, label=items[0].value)] + items[1:])
 
 
-def show_choices(choices: list[Choice]):
-    for enum, choice in enumerate(choices, 1):
-        rich.print(f"[bold yellow]Choice {enum}:")
-        for line in choice.prev_dialogue[-3:]:
-            rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
+# class ChoicesTransformer(Transformer):
+#     """
+#     Extract choices along with relevant dialogue surrounding them.
+#     """
 
-        rich.print(f"[dim]\[{choice.line}][/dim] [green]choice:[/] {choice.choice}")
-        pad = " " * (len(str(choice.line)) + 2)
-        rich.print(
-            f"{pad} [red]voiced:[/] {clean_choice_for_tts(choice.choice) or '[dim](silent)[/]'}"
-        )
+#     def __init__(self):
+#         self.labels: list[Label] = []
+#         self.dialogues: list[Dialogue] = []
+#         self.menus: list[Menu] = []
 
-        for line in choice.next_dialogue[:3]:
-            rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
-        rich.print("\n")
+#     @v_args(meta=True)
+#     def identifier(self, meta, items):
+#         return Text(line=meta.line, text=items[0].value)
+
+#     def condition(self, items):
+#         return items[0].value.strip()
+
+#     @v_args(meta=True)
+#     def quoted(self, meta, items):
+#         return Text(line=meta.line, text=items[0].value)
+
+#     def voice(self, items):
+#         return items[0].text
+
+#     def dialogue(self, items):
+#         character, text_token = items[:2]
+#         dlg = Dialogue(
+#             line=character.line,
+#             character=character.text,
+#             text=text_token.text,
+#         )
+#         return dlg
+
+#     def _filter_dialogue(self, dlg: Dialogue):
+#         if re.search(r"^Note:", dlg.text) or "{fast}" in dlg.text:
+#             return False
+#         return True
+
+#     def voiced_dialogue(self, items):
+#         voice_path, dialogue = items
+#         dialogue.voice = voice_path
+#         if self._filter_dialogue(dialogue):
+#             self.dialogues.append(dialogue)
+#         return dialogue
+
+#     @v_args(meta=True)
+#     def label(self, meta, items):
+#         label_name = items[0]
+#         label = Label(line=label_name.line, label=label_name.text)
+#         self.labels.append(label)
+#         return Tree("label", items)
+
+#     @v_args(meta=True)
+#     def menu(self, meta, items):
+#         menu = Menu(line=meta.line, choices=items)
+#         self.menus.append(menu)
+#         return Tree("menu", items)
+
+#     def choice(self, items):
+#         choice, *rest = items
+#         condition = None
+#         next_dialogue = []
+#         if rest and isinstance(rest[0], str):
+#             condition = rest[0]
+#             rest = rest[1:]
+#         if rest:
+#             next_dialogue = list(self.extract_next_dialogue(rest))
+
+#         choice = Choice(
+#             line=choice.line,
+#             choice=choice.text,
+#             condition=condition,
+#             next_dialogue=next_dialogue,
+#         )
+#         return choice
+
+#     def extract_next_dialogue(self, items):
+#         """
+#         Extract dialogues that follow a choice up to next menu.
+#         """
+#         for item in items:
+#             if isinstance(item, Dialogue):
+#                 yield item
+#             elif isinstance(item, Menu):
+#                 break
+#             elif item.data == "label":
+#                 yield from self.extract_next_dialogue(item.children[1:])
+#             elif item.data == "block":
+#                 yield from self.extract_next_dialogue(item.children)
+
+#     def _find_context_at_line(self, items: list[Line], line: int):
+#         items = sorted(items, key=attrgetter("line"))
+#         lines = [item.line for item in items]
+#         index = bisect_right(lines, line) - 1
+#         return items[index] if index != -1 else Line(line=1)
+
+#     def find_label_at_line(self, line) -> Label:
+#         return self._find_context_at_line(self.labels, line)
+
+#     def find_menu_before_line(self, line) -> Menu:
+#         return self._find_context_at_line(self.menus, line - 1)
+
+#     def find_prev_dialogue(self, start, stop) -> list[Dialogue]:
+#         """
+#         Find dialogues between last label and menu start.
+#         """
+#         dialogues = [d for d in self.dialogues if d.line > start and d.line < stop]
+#         return dialogues
+
+#     def start(self, items):
+#         """
+#         After the whole tree has been transformed, we have all the labels, menus, and dialogue lines.
+#         Now we traverse it again to add labels and previous dialogue to choices before returning them.
+#         """
+#         choices = []
+#         for menu in self.menus:
+#             for choice in menu.choices:
+#                 label = self.find_label_at_line(choice.line)
+#                 prev_menu = self.find_menu_before_line(menu.line)
+#                 choice.label = label.label
+#                 choice.prev_menu = prev_menu
+#                 choice.prev_dialogue = self.find_prev_dialogue(prev_menu.line, menu.line)
+#                 choices.append(choice)
+
+#         return sorted(choices, key=attrgetter("line"))
+
+
+# def show_choices(choices: list[Choice]):
+#     for enum, choice in enumerate(choices, 1):
+#         rich.print(f"[bold yellow]Choice {enum}:")
+#         for line in choice.prev_dialogue[-3:]:
+#             rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
+
+#         rich.print(f"[dim]\[{choice.line}][/dim] [green]choice:[/] {choice.choice}")
+#         pad = " " * (len(str(choice.line)) + 2)
+#         rich.print(
+#             f"{pad} [red]voiced:[/] {clean_choice_for_tts(choice.choice) or '[dim](silent)[/]'}"
+#         )
+
+#         for line in choice.next_dialogue[:3]:
+#             rich.print(f"[dim]\[{line.line}][/dim] [blue]{line.character}:[/] {line.text}")
+#         rich.print("\n")
 
 
 @_app.command("parse")
 def parse_script(path: Path, debug: bool = False):
     print("=" * 120)
     script = clean_script(path)
-    result = grammar.parse(script)
-    rich.print(result)
-    transformed = ChoicesTransformer().transform(result)
-    if debug:
-        rich.print(transformed)
-        rich.print(len(transformed), "choices extracted")
-        rich.print("\n")
-        show_choices(transformed)
-    return transformed
+    tree = grammar.parse(script)
+    ast_tree = RenpyTransformer().transform(tree)
+    rich.print(ast_tree)
+    # transformed = ChoicesTransformer().transform(result)
+    # if debug:
+    #     rich.print(transformed)
+    #     rich.print(len(transformed), "choices extracted")
+    #     rich.print("\n")
+    #     show_choices(transformed)
+    # return transformed
 
 
 if __name__ == "__main__":
