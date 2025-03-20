@@ -194,7 +194,7 @@ class RenpyTransformer(Transformer):
 
     @v_args(meta=True)
     def label(self, meta, items):
-        return Label(line=meta.line, label=items[0].value, children=items[1:])
+        return Label(line=meta.line, label=items[0].value, children=items[1])
 
     @v_args(meta=True)
     def menu(self, meta, items):
