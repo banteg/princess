@@ -1,3 +1,4 @@
+# extracted with princess.characters.extract_characters()
 CHARACTERS = [
     "y",
     "sp",
