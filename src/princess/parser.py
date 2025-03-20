@@ -1,3 +1,12 @@
+"""
+This pipeline extracts player choices and surrounding dialogue from the branching game scripts.
+
+It consists of several stages:
+1. Clean: preprocess the script to only keep the lines we are interested in.
+2. Parse: use a minimal Lark grammar to parse the script into a tree structure (bottom-up).
+3. Extract: traverse the tree top-down to extract the player choices and surrounding dialogue.
+"""
+
 from operator import attrgetter
 import re
 from bisect import bisect_right
