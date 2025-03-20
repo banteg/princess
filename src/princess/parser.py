@@ -151,6 +151,11 @@ class Line:
 
 
 @dataclass
+class Subtree:
+    children: list
+
+
+@dataclass
 class Dialogue(Line):
     character: str
     dialogue: str
@@ -158,19 +163,17 @@ class Dialogue(Line):
 
 
 @dataclass
-class Choice(Line):
+class Choice(Line, Subtree):
     choice: str
-    children: list
 
 
 @dataclass
-class Label(Line):
+class Label(Line, Subtree):
     label: str
-    children: list
 
 
 @dataclass
-class Menu(Line):
+class Menu(Line, Subtree):
     children: list[Choice]
 
 
@@ -224,7 +227,7 @@ class RenpyTransformer(Transformer):
         return items
 
     def start(self, items):
-        return items
+        return Subtree(children=items)
 
 
 # Stage 3: Extract choices
@@ -253,8 +256,7 @@ def extract_choices(tree) -> list[ChoiceResult]:
     def walk_tree(node, prev=None):
         if prev is None:
             prev = []
-        children = node if isinstance(node, list) else node.children
-        for sub in children:
+        for sub in node.children:
             match sub:
                 case Dialogue():
                     prev.append(sub.dialogue)
