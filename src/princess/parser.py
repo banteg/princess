@@ -248,7 +248,7 @@ def extract_choices(tree) -> list[ChoiceResult]:
         for sub in node.children:
             match sub:
                 case Dialogue():
-                    yield sub.dialogue
+                    yield sub
                 case Label():
                     yield from collect_until_menu(sub)
                 case Menu():
