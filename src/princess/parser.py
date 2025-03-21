@@ -67,7 +67,6 @@ def clean_script(path: Path, debug: bool = False):
             if keep_re.search(line) or character_re.search(line):
                 if choice_re.search(line):
                     yield choice_re.sub(r"\1:", line)
-                    print("simplify line:", line, choice_re.sub(r"\1:", line))
                 else:
                     yield line
 
@@ -75,12 +74,9 @@ def clean_script(path: Path, debug: bool = False):
         # make sure we don't have empty conditional blocks
         for i, line in enumerate(lines):
             if if_re.search(line):
-                # replace conditions with if:, elif:, else:
-                yield if_re.sub(r"\1\2:", line)
                 next_line = lines[i + 1]
-                if indent_of(next_line) <= indent_of(line):
-                    pass_line = " " * (indent_of(line) + 4) + "pass"
-                    yield pass_line
+                if indent_of(next_line) > indent_of(line):
+                    yield if_re.sub(r"\1\2:", line)
             else:
                 yield line
 
