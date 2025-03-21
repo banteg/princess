@@ -75,7 +75,7 @@ def clean_script(path: Path, debug: bool = False):
     def fix_conditionals(lines):
         # make sure we don't have empty conditional blocks
         for i, line in enumerate(lines):
-            if if_re.search(line):
+            if if_re.search(line) and i < len(lines) - 1:
                 next_line = lines[i + 1]
                 if indent_of(next_line) > indent_of(line):
                     yield if_re.sub(r"\1\2:", line)
