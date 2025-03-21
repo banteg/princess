@@ -52,8 +52,10 @@ def clean_script(path: Path, debug: bool = False):
         re.VERBOSE | re.IGNORECASE,
     )
     if_re = re.compile(r"^(\s*)(if|elif|else)\b(.*):")
-    # "{i}• Choice{/i}" if condition:
+    # "{i}• Choice{/i}" [if condition]:
     choice_re = re.compile(r'(^\s*"\{i\}•[^"]+")(\s+if\b[^:]+)?:')
+    # n "Dialogue\n" [id ch1_razor_alt_start_bb9f7415]
+    dialogue_re = re.compile(r'(\s*)(\w+) ("[^"]+")( id .*)?')
 
     lines = Path(path).read_text().splitlines()
 
@@ -77,6 +79,8 @@ def clean_script(path: Path, debug: bool = False):
                 next_line = lines[i + 1]
                 if indent_of(next_line) > indent_of(line):
                     yield if_re.sub(r"\1\2:", line)
+            elif dialogue_re.search(line):
+                yield dialogue_re.sub(r"\1\2 \3", line)
             else:
                 yield line
 
