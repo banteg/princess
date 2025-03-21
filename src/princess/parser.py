@@ -140,7 +140,7 @@ grammar = Lark(
 
     voiced_dialogue: voice _NL dialogue
     dialogue: identifier quoted _NL
-    voice: "voice" quoted
+    voice: "voice" quoted _NL
 
     identifier: /[a-zA-Z_]\w*/  # python identifier
     quoted: "\"" /[^\"]+/ "\""  # quoted string
