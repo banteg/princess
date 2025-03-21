@@ -17,7 +17,6 @@ import typer
 from lark import Discard, Lark, Token, Transformer, Tree, v_args
 from lark.indenter import Indenter
 
-from princess.constants import CHARACTERS
 from princess.game import get_game_path, walk_script_files
 
 _app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -102,6 +101,26 @@ def build_script_tree(script: str) -> Tree:
             stack[-1].children.append(token)
 
     return root
+
+
+"""
+Stage 2: Cleanup
+Remove lines that weren't assigned a token and blocks with no children.
+"""
+
+
+class CleanupTransformer(Transformer):
+    def LINE(self, token):
+        # strip lines that weren't assigned a token
+        return Discard
+
+    def block(self, children):
+        header, body = children
+        num_sub = len([sub for sub in body.children if sub])
+        # strip empty subtrees
+        if num_sub == 0:
+            return Discard
+        return Tree("block", children)
 
 
 # Stage 2: Parse
