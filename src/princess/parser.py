@@ -114,6 +114,7 @@ grammar = Lark(
               | menu
               | voiced_dialogue
               | dialogue
+              | voice
               | if_block
               | jump
               | pass
