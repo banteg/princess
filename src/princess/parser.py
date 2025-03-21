@@ -51,7 +51,9 @@ def clean_script(path: Path, debug: bool = False):
         """,
         re.VERBOSE | re.IGNORECASE,
     )
-    if_re = re.compile(r"(\s*)(if|elif|else)\b(.*):")
+    if_re = re.compile(r"^(\s*)(if|elif|else)\b(.*):")
+    # "{i}• Choice{/i}" if condition:
+    choice_re = re.compile(r'(^\s*"\{i\}•[^"]+")(\s?if[^:]+)?:')
 
     lines = Path(path).read_text().splitlines()
 
@@ -61,9 +63,13 @@ def clean_script(path: Path, debug: bool = False):
     # Now we simply yield the lines that match `keep_re` or `character_re`
     # (the latter was for lines like:  n "some dialogue")
     def select_lines(lines):
-        for i, line in enumerate(lines):
+        for line in lines:
             if keep_re.search(line) or character_re.search(line):
-                yield line
+                if choice_re.search(line):
+                    yield choice_re.sub(r"\1:", line)
+                    print("simplify line:", line, choice_re.sub(r"\1:", line))
+                else:
+                    yield line
 
     def fix_conditionals(lines):
         # make sure we don't have empty conditional blocks
@@ -117,8 +123,8 @@ grammar = Lark(
               | pass
 
     # Modified conditionals to handle empty blocks
-    if_block: "if" condition ":" _NL block (elif_block)* (else_block)?
-    elif_block: "elif" condition ":" _NL block
+    if_block: "if" ":" _NL block (elif_block)* (else_block)?
+    elif_block: "elif" ":" _NL block
     else_block: "else" ":" _NL block
 
     condition: /[^\n:]+/
