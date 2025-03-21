@@ -8,124 +8,100 @@ It consists of several stages:
 """
 
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 import rich
 import typer
-from lark import Discard, Lark, Transformer, v_args
+from lark import Discard, Lark, Token, Transformer, Tree, v_args
 from lark.indenter import Indenter
-from princess.game import get_game_path, walk_script_files
+
 from princess.constants import CHARACTERS
-from collections import Counter
+from princess.game import get_game_path, walk_script_files
 
 _app = typer.Typer(pretty_exceptions_show_locals=False)
 
+"""
+Stage 1: Indentation parser
+Construct a raw tree from indented structure for further processing.
+"""
 
-# Stage 1: Clean
-# Here we preprocess the script for our minimal grammar and only keep the lines we are interested in.
-# We also dedent the bodies of control blocks as if the conditions weren't there.
+label_re = re.compile(r"^\s*label [a-z]\w*:$")
+menu_re = re.compile(r"^\s*menu:$")
+jump_re = re.compile(r"^\s*jump \w+$")
+voice_re = re.compile(r"^\s*voice \"[^\"]+\"$")
+dialogue_re = re.compile(r'^\s*\w+ "[^"]+"( id .*)?$')
+choice_re = re.compile(r'^\s*"(\{i\})?•[^"]+"( if .+)?:')
+condition_re = re.compile(r"^\s*(if|elif|else).*:")
 
 
-@_app.command("clean")
-def clean_script(path: Path, debug: bool = False):
+@dataclass
+class Meta:
+    line: int
+    indent: int
+
+
+def is_empty(line: str) -> bool:
+    return not line.strip() or line.strip().startswith("#")
+
+
+def is_block_start(line: str) -> bool:
+    return line.rstrip().endswith(":")
+
+
+def line_token(line: str) -> str:
+    if label_re.search(line):
+        return "LABEL"
+    elif menu_re.search(line):
+        return "MENU"
+    elif jump_re.search(line):
+        return "JUMP"
+    elif voice_re.search(line):
+        return "VOICE"
+    elif dialogue_re.search(line):
+        return "DIALOGUE"
+    elif choice_re.search(line):
+        return "CHOICE"
+    elif condition_re.search(line):
+        return "CONDITION"
+    else:
+        return "LINE"
+
+
+def build_script_tree(script: str) -> Tree:
     """
-    Preprocess a script and keep only the lines we are interested in (labels, menus, dialogue,
-    if/elif/else blocks, jumps, etc.), preserving their indentation so our grammar can parse them.
+    Parse an indented script into a tree structure.
     """
-    print("Cleaning script...", path)
-    # label basement_1_knife_start
-    label_re = re.compile(r"^\s*label [a-z]\w*:$")
-    # menu:
-    menu_re = re.compile(r"^\s*menu:$")
-    # jump start:
-    jump_re = re.compile(r"^\s*jump \w+$")
-    # voice "audio/voices/ch1/knife/narrator/knife_n_0.flac"
-    voice_re = re.compile(r"^\s*voice \"[^\"]+\"$")
-    # p "Oh. Have you decided what to do with me?\n"
-    dialogue_re = re.compile(r'^\s*\w+ "[^"]+"( id .*)?$')
-    # "{i}• [[Remain silent.]{/i}":
-    choice_re = re.compile(r'^\s*"(\{i\})?•[^"]+"( if .+)?:')
-    # conditionals
-    condition_re = re.compile(r"^\s*(if|elif|else).*:")
+    assert isinstance(script, str)
+    root = Tree("start", [], meta=Meta(line=0, indent=-1))
+    stack = [root]
+    lines = script.splitlines()
+    for lineno, line in enumerate(lines, start=1):
+        if is_empty(line):
+            continue
+        strip = line.strip()
+        indent = len(line) - len(line.lstrip())
+        meta = Meta(line=lineno, indent=indent)
 
-    def is_interesting(line):
-        if (
-            label_re.search(line)
-            or menu_re.search(line)
-            or jump_re.search(line)
-            or voice_re.search(line)
-            or dialogue_re.search(line)
-            or choice_re.search(line)
-            or condition_re.search(line)
-        ):
-            return True
-        return False
+        # we dedented so we pop all blocks that we exited
+        while stack and indent <= stack[-1].meta.indent:
+            stack.pop()
 
-    lines = Path(path).read_text().splitlines()
-    result = [line for line in lines if is_interesting(line)]
-    print(f"{len(lines)} -> {len(result)} lines")
+        if is_block_start(line):
+            # add block[header, body]
+            header = Token(line_token(line), strip, line=lineno)
+            body = Tree("body", [], meta=meta)
+            block = Tree("block", [header, body], meta=meta)
+            # add block to parent, but put children in body
+            stack[-1].children.append(block)
+            stack.append(body)
+        else:
+            # append line to the parent body
+            token = Token(line_token(line), strip, line=lineno)
+            stack[-1].children.append(token)
 
-    output = "\n".join(result) + "\n"
-    Path("debug_script.rpy").write_text(output)
-    return output
-
-    character_re = re.compile(r"^\s*(" + "|".join(CHARACTERS) + r")\s+\"")
-
-    # This regex tries to capture the typical Ren'Py lines we need:
-    keep_re = re.compile(
-        r""" ^
-        (\s*
-            (
-                label\s+[a-z][a-z0-9_]*:  # label start
-                |menu\s*:\s*              # choice menu
-                |(if|elif|else)\b.*:\s*   # conditional blocks
-                |jump\s+\w+               # jump label
-                |voice\s+"[^"]+"          # voice "some_file"
-                |"(\{i\})?•              # choice bullet
-            )
-        )
-        """,
-        re.VERBOSE | re.IGNORECASE,
-    )
-    if_re = re.compile(r"^(\s*)(if|elif|else)\b(.*):")
-    # "{i}• Choice{/i}" [if condition]:
-    choice_re = re.compile(r'(^\s*"\{i\}•[^"]+")(\s+if\b[^:]+)?:')
-    # n "Dialogue\n" [id ch1_razor_alt_start_bb9f7415]
-    dialogue_re = re.compile(r'(\s*)(\w+) ("[^"]+")( id .*)?')
-
-    lines = Path(path).read_text().splitlines()
-
-    def indent_of(line):
-        return len(line) - len(line.lstrip())
-
-    # Now we simply yield the lines that match `keep_re` or `character_re`
-    # (the latter was for lines like:  n "some dialogue")
-    def select_lines(lines):
-        for line in lines:
-            if keep_re.search(line) or character_re.search(line):
-                if choice_re.search(line):
-                    yield choice_re.sub(r"\1:", line)
-                else:
-                    yield line
-
-    def fix_conditionals(lines):
-        # make sure we don't have empty conditional blocks
-        for i, line in enumerate(lines):
-            if if_re.search(line) and i < len(lines) - 1:
-                next_line = lines[i + 1]
-                if indent_of(next_line) > indent_of(line):
-                    yield if_re.sub(r"\1\2:", line)
-            elif dialogue_re.search(line):
-                yield dialogue_re.sub(r"\1\2 \3", line)
-            else:
-                yield line
-
-    lines = list(select_lines(lines))
-    lines = list(fix_conditionals(lines))
-    script = "\n".join(lines) + "\n"
-    # Path("clean_script.rpy").write_text(script)
-    return script
+    return root
 
 
 # Stage 2: Parse
