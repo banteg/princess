@@ -53,7 +53,7 @@ def clean_script(path: Path, debug: bool = False):
     )
     if_re = re.compile(r"^(\s*)(if|elif|else)\b(.*):")
     # "{i}• Choice{/i}" if condition:
-    choice_re = re.compile(r'(^\s*"\{i\}•[^"]+")(\s?if[^:]+)?:')
+    choice_re = re.compile(r'(^\s*"\{i\}•[^"]+")(\s+if\b[^:]+)?:')
 
     lines = Path(path).read_text().splitlines()
 
