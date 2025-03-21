@@ -139,8 +139,7 @@ grammar = Lark(
     choice: quoted condition? ":" _NL [block]
 
     voiced_dialogue: voice _NL dialogue
-    dialogue: identifier quoted [id_clause] _NL
-    id_clause: /id\s\w+/
+    dialogue: identifier quoted _NL
     voice: "voice" quoted
 
     identifier: /[a-zA-Z_]\w*/  # python identifier
