@@ -33,6 +33,43 @@ def clean_script(path: Path, debug: bool = False):
     Preprocess a script and keep only the lines we are interested in (labels, menus, dialogue,
     if/elif/else blocks, jumps, etc.), preserving their indentation so our grammar can parse them.
     """
+    print("Cleaning script...", path)
+    # label basement_1_knife_start
+    label_re = re.compile(r"^\s*label [a-z]\w*:$")
+    # menu:
+    menu_re = re.compile(r"^\s*menu:$")
+    # jump start:
+    jump_re = re.compile(r"^\s*jump \w+$")
+    # voice "audio/voices/ch1/knife/narrator/knife_n_0.flac"
+    voice_re = re.compile(r"^\s*voice \"[^\"]+\"$")
+    # p "Oh. Have you decided what to do with me?\n"
+    dialogue_re = re.compile(r'^\s*\w+ "[^"]+"( id .*)?$')
+    # "{i}• [[Remain silent.]{/i}":
+    choice_re = re.compile(r'^\s*"(\{i\})?•[^"]+"( if .+)?:')
+    # conditionals
+    condition_re = re.compile(r"^\s*(if|elif|else).*:")
+
+    def is_interesting(line):
+        if (
+            label_re.search(line)
+            or menu_re.search(line)
+            or jump_re.search(line)
+            or voice_re.search(line)
+            or dialogue_re.search(line)
+            or choice_re.search(line)
+            or condition_re.search(line)
+        ):
+            return True
+        return False
+
+    lines = Path(path).read_text().splitlines()
+    result = [line for line in lines if is_interesting(line)]
+    print(f"{len(lines)} -> {len(result)} lines")
+
+    output = "\n".join(result) + "\n"
+    Path("debug_script.rpy").write_text(output)
+    return output
+
     character_re = re.compile(r"^\s*(" + "|".join(CHARACTERS) + r")\s+\"")
 
     # This regex tries to capture the typical Ren'Py lines we need:
@@ -87,7 +124,7 @@ def clean_script(path: Path, debug: bool = False):
     lines = list(select_lines(lines))
     lines = list(fix_conditionals(lines))
     script = "\n".join(lines) + "\n"
-    Path("clean_script.rpy").write_text(script)
+    # Path("clean_script.rpy").write_text(script)
     return script
 
 
