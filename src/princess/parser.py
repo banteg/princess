@@ -30,7 +30,7 @@ dialogue_re = re.compile(
     r"^\s*(?P<character>" + "|".join(CHARACTERS) + r') "(?P<dialogue>[^"]+)"( id .*)?$'
 )
 choice_re = re.compile(r'^\s*"(?P<choice>(?:\{i\})?•[^"]+)"(?: if (?P<condition>.+))?:$')
-condition_re = re.compile(r"^\s*(if|elif|else).*:$")
+condition_re = re.compile(r"^\s*(?P<kind>if|elif|else)\s*(?P<condition>.*):$")
 
 
 @dataclass
@@ -137,6 +137,12 @@ class Jump:
 
 
 @dataclass
+class Condition:
+    kind: str
+    condition: str
+
+
+@dataclass
 class Block:
     header: Label | Menu | Choice | Token
     children: list
@@ -190,6 +196,10 @@ class DialogueTransformer(Transformer):
     def JUMP(self, token):
         search = jump_re.search(token.value)
         return Jump(**search.groupdict())
+
+    def CONDITION(self, token):
+        search = condition_re.search(token.value)
+        return Condition(**search.groupdict())
 
     def LINE(self, token):
         # strip lines that weren't assigned a token
