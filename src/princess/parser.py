@@ -49,7 +49,7 @@ def is_block_start(line: str) -> bool:
     return line.rstrip().endswith(":")
 
 
-def line_token(line: str) -> str:
+def line_token(line: str, header: bool = False) -> str:
     if label_re.search(line):
         return "LABEL"
     elif menu_re.search(line):
@@ -65,7 +65,7 @@ def line_token(line: str) -> str:
     elif condition_re.search(line):
         return "CONDITION"
     else:
-        return "LINE"
+        return "HEADER" if header else "LINE"
 
 
 def build_script_tree(script: str) -> Tree:
@@ -89,7 +89,7 @@ def build_script_tree(script: str) -> Tree:
 
         if is_block_start(line):
             # add block[header, body]
-            header = Token(line_token(line), strip, line=lineno)
+            header = Token(line_token(line, header=True), strip, line=lineno)
             body = Tree("body", [], meta=meta)
             block = Tree("block", [header, body], meta=meta)
             # add block to parent, but put children in body
