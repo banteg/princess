@@ -7,16 +7,15 @@ It consists of several stages:
 3. Extract: traverse the tree top-down to extract the player choices and surrounding dialogue.
 """
 
+import itertools
 import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-import itertools
 
 import rich
 import typer
-from lark import Discard, Lark, Token, Transformer, Tree, v_args
-from lark.indenter import Indenter
+from lark import Discard, Token, Transformer, Tree
 
 from princess.game import get_game_path, walk_script_files
 
@@ -27,13 +26,13 @@ Stage 1: Indentation parser
 Construct a raw tree from indented structure for further processing.
 """
 
-label_re = re.compile(r"^\s*label [a-z]\w*:$")
+label_re = re.compile(r"^\s*label (?P<label>\w+):$")
 menu_re = re.compile(r"^\s*menu:$")
-jump_re = re.compile(r"^\s*jump \w+$")
-voice_re = re.compile(r"^\s*voice \"[^\"]+\"$")
-dialogue_re = re.compile(r'^\s*\w+ "[^"]+"( id .*)?$')
-choice_re = re.compile(r'^\s*"(\{i\})?•[^"]+"( if .+)?:')
-condition_re = re.compile(r"^\s*(if|elif|else).*:")
+jump_re = re.compile(r"^\s*jump (?P<dest>\w+)$")
+voice_re = re.compile(r"^\s*voice \"(?P<voice>[^\"]+)\"$")
+dialogue_re = re.compile(r'^\s*(?P<character>\w+) "(?P<dialogue>[^"]+)"( id .*)?$')
+choice_re = re.compile(r'^\s*"(?P<choice>(?:\{i\})?•[^"]+)"(?: if (?P<condition>.+))?:$')
+condition_re = re.compile(r"^\s*(if|elif|else).*:$")
 
 
 @dataclass
@@ -105,28 +104,10 @@ def build_script_tree(script: str) -> Tree:
 
 
 """
-Stage 2: Cleanup
-Remove lines that weren't assigned a token and blocks with no children.
-"""
-
-
-class CleanupTransformer(Transformer):
-    def LINE(self, token):
-        # strip lines that weren't assigned a token
-        return Discard
-
-    def block(self, children):
-        header, body = children
-        num_sub = len([sub for sub in body.children if sub])
-        # strip empty subtrees
-        if num_sub == 0:
-            return Discard
-        return Tree("block", children)
-
-
-"""
-Stage 3: Transform
-Merge voice and dialogue lines, parse choices and labels.
+Stage 2: Transform
+Remove lines that weren't assigned a token, empty blocks.
+Merge voice and dialogue lines.
+Parse choices and labels.
 """
 
 
@@ -136,6 +117,17 @@ class Dialogue:
     character: str
     dialogue: str
     voice: str | None = None
+
+
+@dataclass
+class Choice:
+    choice: str
+    condition: str | None = None
+
+
+@dataclass
+class Label:
+    label: str
 
 
 class DialogueTransformer(Transformer):
@@ -148,14 +140,13 @@ class DialogueTransformer(Transformer):
                 continue
             match node, succ:
                 case Token("VOICE", voice_str), Token("DIALOGUE", dialogue_str):
-                    voice = re.search(r'"([^"]+)"', voice_str).group(1)
-                    character, dialogue = re.search(r'^(\w+) "([^"]+)"', dialogue_str).groups()
+                    voice_search = voice_re.search(voice_str)
+                    dialogue_search = dialogue_re.search(dialogue_str)
                     result.append(
                         Dialogue(
                             line=succ.line,
-                            character=character,
-                            dialogue=dialogue,
-                            voice=voice,
+                            **voice_search.groupdict(),
+                            **dialogue_search.groupdict(),
                         )
                     )
                     skip = True
@@ -165,134 +156,25 @@ class DialogueTransformer(Transformer):
             result.append(children[-1])
         return Tree("body", result)
 
+    def block(self, children):
+        header, body = children
+        num_sub = len([sub for sub in body.children if sub])
+        # strip empty subtrees
+        if num_sub == 0:
+            return Discard
+        return Tree("block", children)
+
     def CHOICE(self, token):
-        search = re.search(r'^"([^"]+)"( if (.*))?:$', token.value)
-        return Tree(
-            "choice",
-            [Token("CHOICE", search.group(1)), Token("INLINE_CONDITION", search.group(3))],
-        )
+        search = choice_re.search(token.value)
+        return Choice(**search.groupdict())
 
     def LABEL(self, token):
-        search = re.search(r"^label (\w+):", token.value)
-        return Token("LABEL", search.group(1))
+        search = label_re.search(token.value)
+        return Label(**search.groupdict())
 
-
-# Stage 2: Parse
-# Here we use a minimal Lark grammar to parse the script into a tree structure.
-# Then we transform it into a tree infused with metadata like line numbers.
-# We also merge voice and dialogue nodes into a unified node.
-
-
-class RenpyIndenter(Indenter):
-    """
-    Postlexer to inject _INDENT/_DEDENT tokens based on indentation.
-    """
-
-    NL_type = "_NL"
-    OPEN_PAREN_types = []
-    CLOSE_PAREN_types = []
-    INDENT_type = "_INDENT"
-    DEDENT_type = "_DEDENT"
-    tab_len = 4
-
-
-grammar = Lark(
-    r"""
-    start: statement* _NL?
-
-    ?statement: label
-              | menu
-              | voiced_dialogue
-              | dialogue
-              | voice
-              | if_block
-              | jump
-              | pass
-
-    # Modified conditionals to handle empty blocks
-    if_block: "if" ":" _NL block (elif_block)* (else_block)?
-    elif_block: "elif" ":" _NL block
-    else_block: "else" ":" _NL block
-
-    condition: /[^\n:]+/
-    jump: "jump" identifier _NL
-    pass: "pass" _NL
-
-    block: _INDENT statement+ _DEDENT
-
-    label: "label" identifier ":" _NL [block]
-    menu: "menu" ":" _NL _INDENT choice+ _DEDENT
-    choice: quoted condition? ":" _NL [block]
-
-    voiced_dialogue: voice _NL dialogue
-    dialogue: identifier quoted _NL
-    voice: "voice" quoted _NL
-
-    identifier: /[a-zA-Z_]\w*/  # python identifier
-    quoted: "\"" /[^\"]+/ "\""  # quoted string
-
-    _NL: /\r?\n[\t ]*/  # MUST match line break as well as indentation
-    %declare _INDENT _DEDENT
-    %import common.WS_INLINE
-    %ignore WS_INLINE
-    """,
-    parser="lalr",
-    postlex=RenpyIndenter(),
-    propagate_positions=True,
-)
-
-
-class RenpyTransformer(Transformer):
-    def quoted(self, items):
-        return items[0]
-
-    def identifier(self, items):
-        return items[0]
-
-    @v_args(meta=True)
-    def dialogue(self, meta, items):
-        return Dialogue(
-            character=items[0].value,
-            dialogue=items[1].value,
-            line=meta.line,
-        )
-
-    def voice(self, items):
-        return items[0]
-
-    def voiced_dialogue(self, items):
-        dialogue = items[1]
-        dialogue.voice = items[0].value
-        return dialogue
-
-    def condition(self, items):
+    def LINE(self, token):
+        # strip lines that weren't assigned a token
         return Discard
-
-    @v_args(meta=True)
-    def choice(self, meta, items):
-        return Choice(
-            line=meta.line,
-            choice=items[0].value,
-            children=items[1] if len(items) > 1 else [],
-        )
-
-    @v_args(meta=True)
-    def label(self, meta, items):
-        return Label(
-            line=meta.line,
-            label=items[0].value,
-            children=items[1] if len(items) > 1 else [],
-        )
-
-    @v_args(meta=True)
-    def menu(self, meta, items):
-        return Menu(line=meta.line, children=items)
-
-    def block(self, items):
-        return items
-
-    def start(self, items):
-        return Subtree(children=items)
 
 
 # Stage 3: Extract choices
