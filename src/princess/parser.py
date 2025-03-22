@@ -18,6 +18,7 @@ import typer
 from lark import Discard, Token, Transformer, Tree
 
 from princess.game import get_game_path, walk_script_files
+from princess.constants import CHARACTERS
 
 _app = typer.Typer(pretty_exceptions_show_locals=False)
 
@@ -30,7 +31,9 @@ label_re = re.compile(r"^\s*label (?P<label>\w+):$")
 menu_re = re.compile(r"^\s*menu:$")
 jump_re = re.compile(r"^\s*jump (?P<dest>\w+)$")
 voice_re = re.compile(r"^\s*voice \"(?P<voice>[^\"]+)\"$")
-dialogue_re = re.compile(r'^\s*(?P<character>\w+) "(?P<dialogue>[^"]+)"( id .*)?$')
+dialogue_re = re.compile(
+    r"^\s*(?P<character>" + "|".join(CHARACTERS) + r') "(?P<dialogue>[^"]+)"( id .*)?$'
+)
 choice_re = re.compile(r'^\s*"(?P<choice>(?:\{i\})?•[^"]+)"(?: if (?P<condition>.+))?:$')
 condition_re = re.compile(r"^\s*(if|elif|else).*:$")
 
