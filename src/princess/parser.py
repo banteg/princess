@@ -20,7 +20,7 @@ from lark import Discard, Token, Transformer, Tree
 from princess.game import get_game_path, walk_script_files
 from princess.constants import CHARACTERS
 
-_app = typer.Typer(pretty_exceptions_show_locals=False)
+app = typer.Typer(pretty_exceptions_show_locals=False)
 
 """
 Stage 1: Indentation parser
@@ -180,99 +180,17 @@ class DialogueTransformer(Transformer):
         return Discard
 
 
-# Stage 3: Extract choices
-# Here we extract choices and their surrounding dialogue by traversing the tree.
-# The resulting list can be used for further work on text-to-speech generation.
+def parse_script(path: Path) -> Tree:
+    script = path.read_text()
+    tree = build_script_tree(script)
+    return DialogueTransformer().transform(tree)
 
 
-@dataclass
-class ChoiceResult(Line):
-    choice: str
-    previous: list[Dialogue]
-    subsequent: list[Dialogue]
-    label: str | None = None
-
-
-def extract_choices(tree) -> list[ChoiceResult]:
-    def collect_until_menu(node):
-        for sub in node.children:
-            match sub:
-                case Dialogue():
-                    yield sub
-                case Label():
-                    yield from collect_until_menu(sub)
-                case Menu():
-                    return
-
-    def walk_tree(node, prev=None, label=None):
-        if prev is None:
-            prev = []
-        for sub in node.children:
-            match sub:
-                case Dialogue():
-                    prev.append(sub)
-                case Label():
-                    label = sub.label
-                    yield from walk_tree(sub, prev[:], label)
-                case Menu():
-                    yield from walk_tree(sub, prev[:], label)
-                case Choice():
-                    succ = list(collect_until_menu(sub))
-                    yield ChoiceResult(
-                        line=sub.line,
-                        choice=sub.choice,
-                        previous=prev[:],
-                        subsequent=succ,
-                        label=label,
-                    )
-                    post_prev = prev[:] + [Choice(line=sub.line, choice=sub.choice, children=[])]
-                    yield from walk_tree(sub, post_prev, label)
-
-    return list(walk_tree(tree))
-
-
-@_app.command("parse")
-def parse_script(path: Path, debug: bool = False):
-    script = clean_script(path)
-    raw_tree = grammar.parse(script)
-    ast_tree = RenpyTransformer().transform(raw_tree)
-    if debug:
-        rich.print(ast_tree)
-    return ast_tree
-
-
-@_app.command("choices")
-def extract_choices_from_script(path: Path, debug: bool = False):
-    ast_tree = parse_script(path, debug)
-    choices = extract_choices(ast_tree)
-    if debug:
-        rich.print(choices)
-        rich.print(f"Extracted {len(choices)} choices")
-    return choices
-
-
-@_app.command("all")
-def extract_all_choices(debug: bool = False):
-    all_choices = []
-    stats = Counter()
-    game_path = get_game_path()
-    for path in walk_script_files(game_path):
-        print(path)
-        try:
-            ast_tree = parse_script(path)
-            choices = extract_choices(ast_tree)
-            if debug:
-                rich.print(f"Extracted {len(choices)} choices from {path.relative_to(game_path)}\n")
-            all_choices.extend(choices)
-            stats["success"] += 1
-        except Exception as e:
-            print(f"Error parsing {path.relative_to(game_path)}: {e}\n")
-            stats["errors"] += 1
-    if debug:
-        rich.print(f"Extracted {len(all_choices)} choices from all scripts")
-        rich.print(stats, sum(stats.values()))
-    return all_choices
+@app.command("parse")
+def parse_and_print(path: Path) -> Tree:
+    tree = parse_script(path)
+    rich.print(tree)
 
 
 if __name__ == "__main__":
-    _app()
+    app()
