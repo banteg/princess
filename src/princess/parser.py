@@ -1,15 +1,11 @@
 """
-This pipeline extracts player choices and surrounding dialogue from the branching game scripts.
-
-It consists of several stages:
-1. Clean: preprocess the script to only keep the lines we are interested in.
-2. Parse: use a minimal Lark grammar to parse the script into a tree structure (bottom-up).
-3. Extract: traverse the tree top-down to extract the player choices and surrounding dialogue.
+RenPy script parsing pipeline. We don't use any grammar and instead work our way like this.
+1. Indenter: Construct a tree from Python-like identation, assign known tokens.
+2. Transformer: Remove lines that weren't assigned a token, remove empty blocks, merge voice and dialogue.
 """
 
 import itertools
 import re
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,7 +13,6 @@ import rich
 import typer
 from lark import Discard, Token, Transformer, Tree
 
-from princess.game import get_game_path, walk_script_files
 from princess.constants import CHARACTERS
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -108,9 +103,7 @@ def build_script_tree(script: str) -> Tree:
 
 """
 Stage 2: Transform
-Remove lines that weren't assigned a token, empty blocks.
-Merge voice and dialogue lines.
-Parse choices and labels.
+Remove lines that weren't assigned a token, empty blocks. Merge voice and dialogue lines. Parse choices and labels.
 """
 
 
