@@ -11,6 +11,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+import itertools
 
 import rich
 import typer
@@ -123,6 +124,59 @@ class CleanupTransformer(Transformer):
         return Tree("block", children)
 
 
+"""
+Stage 3: Transform
+Merge voice and dialogue lines, parse choices and labels.
+"""
+
+
+@dataclass
+class Dialogue:
+    line: int
+    character: str
+    dialogue: str
+    voice: str | None = None
+
+
+class DialogueTransformer(Transformer):
+    def body(self, children):
+        result = []
+        skip = False
+        for node, succ in itertools.pairwise(children):
+            if skip:
+                skip = False
+                continue
+            match node, succ:
+                case Token("VOICE", voice_str), Token("DIALOGUE", dialogue_str):
+                    voice = re.search(r'"([^"]+)"', voice_str).group(1)
+                    character, dialogue = re.search(r'^(\w+) "([^"]+)"', dialogue_str).groups()
+                    result.append(
+                        Dialogue(
+                            line=succ.line,
+                            character=character,
+                            dialogue=dialogue,
+                            voice=voice,
+                        )
+                    )
+                    skip = True
+                case _:
+                    result.append(node)
+        if not skip and children:
+            result.append(children[-1])
+        return Tree("body", result)
+
+    def CHOICE(self, token):
+        search = re.search(r'^"([^"]+)"( if (.*))?:$', token.value)
+        return Tree(
+            "choice",
+            [Token("CHOICE", search.group(1)), Token("INLINE_CONDITION", search.group(3))],
+        )
+
+    def LABEL(self, token):
+        search = re.search(r"^label (\w+):", token.value)
+        return Token("LABEL", search.group(1))
+
+
 # Stage 2: Parse
 # Here we use a minimal Lark grammar to parse the script into a tree structure.
 # Then we transform it into a tree infused with metadata like line numbers.
@@ -186,38 +240,6 @@ grammar = Lark(
     postlex=RenpyIndenter(),
     propagate_positions=True,
 )
-
-
-@dataclass
-class Line:
-    line: int
-
-
-@dataclass
-class Subtree:
-    children: list
-
-
-@dataclass
-class Dialogue(Line):
-    character: str
-    dialogue: str
-    voice: str | None = None
-
-
-@dataclass
-class Choice(Line, Subtree):
-    choice: str
-
-
-@dataclass
-class Label(Line, Subtree):
-    label: str
-
-
-@dataclass
-class Menu(Line, Subtree):
-    children: list[Choice]
 
 
 class RenpyTransformer(Transformer):
