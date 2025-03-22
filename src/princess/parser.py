@@ -126,6 +126,22 @@ class Label:
     label: str
 
 
+@dataclass
+class Menu:
+    pass
+
+
+@dataclass
+class Jump:
+    dest: str
+
+
+@dataclass
+class Block:
+    header: Label | Menu | Choice | Token
+    children: list
+
+
 class DialogueTransformer(Transformer):
     def body(self, children):
         result = []
@@ -158,7 +174,7 @@ class DialogueTransformer(Transformer):
         # strip empty subtrees
         if num_sub == 0:
             return Discard
-        return Tree("block", children)
+        return Block(header=header, children=body.children)
 
     def CHOICE(self, token):
         search = choice_re.search(token.value)
@@ -168,9 +184,19 @@ class DialogueTransformer(Transformer):
         search = label_re.search(token.value)
         return Label(**search.groupdict())
 
+    def MENU(self, token):
+        return Menu()
+
+    def JUMP(self, token):
+        search = jump_re.search(token.value)
+        return Jump(**search.groupdict())
+
     def LINE(self, token):
         # strip lines that weren't assigned a token
         return Discard
+
+    def start(self, items):
+        return Block(header="start", children=items)
 
 
 def parse_script(path: Path) -> Tree:
