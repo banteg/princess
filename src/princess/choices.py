@@ -1,7 +1,7 @@
 # Stage 3: Extract choices
 # Here we extract choices and their surrounding dialogue by traversing the tree.
 # The resulting list can be used for text-to-speech generation.
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import rich
@@ -31,7 +31,7 @@ def is_junction(node) -> bool:
 def extract_choices(script: Script) -> list[ChoiceResult]:
     results: list[ChoiceResult] = []
 
-    def walk(node, path: list, current_label: str | None):
+    def walk(node, path: list[Dialogue | Choice], current_label: str | None):
         """
         'path' is a list of items (Dialogue, Choice, etc.) that led us here.
         'current_label' is the active label name.
@@ -85,9 +85,8 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
                 results.append(cr)
 
                 # Step C: For nested blocks, we append the current choice to the path
-                new_path = path[:] + [
-                    Choice(line=ln, choice=choice_text, condition=cond, children=[])
-                ]
+                chosen = Choice(line=ln, choice=choice_text, condition=cond, children=[])
+                new_path = path[:] + [chosen]
 
                 # Now walk deeper (unless next is a junction)
                 for child in cc:
@@ -108,21 +107,18 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
 
 
 def collect_dialogues_until_junction(children: list) -> list[Dialogue]:
-    """
-    Gathers Dialogue objects from these children until hitting a branching node.
-    The test doesn't want other node types in 'subsequent_dialogues'—only Dialogue.
-    """
     found = []
     for child in children:
+        # 1) If child is a junction (Menu, Condition, Jump, etc.), STOP
         if is_junction(child):
             break
         match child:
             case Dialogue():
                 found.append(child)
-            # If there's a label or block, you can recurse if you want
-            # but the test presumably only wants direct lines.
-            case _:
-                pass
+            case Label(children=subchildren):
+                # Recurse further
+                sub_found = collect_dialogues_until_junction(subchildren)
+                found.extend(sub_found)
     return found
 
 
