@@ -21,14 +21,9 @@ Requires Python 3.12+
 
 ```bash
 # Clone the repository
-git clone https://github.com/banteg/slay-the-princess.git
-cd slay-the-princess
-
-# Install using UV (recommended)
-uv pip install -e .
-
-# Or using pip
-pip install -e .
+gh repo clone banteg/princess
+cd princess
+uv sync
 ```
 
 ## Usage
@@ -97,7 +92,3 @@ marimo edit princess_marimo.py
 - Audio handling: `audiofile`, `audresample`, `mutagen`
 - CLI: `typer`, `rich`
 - Interactive notebook: `marimo`
-
-## License
-
-MIT
