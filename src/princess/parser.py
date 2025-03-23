@@ -108,38 +108,42 @@ Remove lines that weren't assigned a token, empty blocks. Merge voice and dialog
 
 
 @dataclass
-class Dialogue:
+class Line:
     line: int
+
+
+@dataclass
+class Dialogue(Line):
     character: str
     dialogue: str
     voice: str | None = None
 
 
 @dataclass
-class Choice:
+class Choice(Line):
     choice: str
     condition: str
     children: list
 
 
 @dataclass
-class Label:
+class Label(Line):
     label: str
     children: list
 
 
 @dataclass
-class Menu:
+class Menu(Line):
     children: list
 
 
 @dataclass
-class Jump:
+class Jump(Line):
     dest: str
 
 
 @dataclass
-class Condition:
+class Condition(Line):
     kind: str
     condition: str
     children: list
@@ -147,12 +151,6 @@ class Condition:
 
 @dataclass
 class Script:
-    children: list
-
-
-@dataclass
-class Block:
-    header: Label | Menu | Choice | Token
     children: list
 
 
@@ -192,21 +190,31 @@ class RenpyTransformer(Transformer):
             return Discard
         match header:
             case Token("LABEL"):
-                return Label(**label_re.search(header.value).groupdict(), children=body.children)
+                return Label(
+                    **label_re.search(header.value).groupdict(),
+                    children=body.children,
+                    line=header.line,
+                )
             case Token("MENU"):
-                return Menu(children=body.children)
+                return Menu(children=body.children, line=header.line)
             case Token("CHOICE"):
-                return Choice(**choice_re.search(header.value).groupdict(), children=body.children)
+                return Choice(
+                    **choice_re.search(header.value).groupdict(),
+                    children=body.children,
+                    line=header.line,
+                )
             case Token("CONDITION"):
                 return Condition(
-                    **condition_re.search(header.value).groupdict(), children=body.children
+                    **condition_re.search(header.value).groupdict(),
+                    children=body.children,
+                    line=header.line,
                 )
             case _:
                 raise ValueError("unknown header type: " + header.type)
 
     def JUMP(self, token):
         search = jump_re.search(token.value)
-        return Jump(**search.groupdict())
+        return Jump(**search.groupdict(), line=token.line)
 
     def LINE(self, token):
         # strip lines that weren't assigned a token
