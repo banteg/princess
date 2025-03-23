@@ -23,7 +23,7 @@ Construct a raw tree from indented structure for further processing.
 """
 
 label_re = re.compile(r"^\s*label (?P<label>\w+):$")
-menu_re = re.compile(r"^\s*menu:$")
+menu_re = re.compile(r"^\s*menu\s*(?P<name>\w+)?:$")
 jump_re = re.compile(r"^\s*jump (?P<dest>\w+)$")
 voice_re = re.compile(r"^\s*voice \"(?P<voice>[^\"]+)\"$")
 dialogue_re = re.compile(
