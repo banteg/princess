@@ -118,17 +118,19 @@ class Dialogue:
 @dataclass
 class Choice:
     choice: str
-    condition: str | None = None
+    condition: str
+    children: list
 
 
 @dataclass
 class Label:
     label: str
+    children: list
 
 
 @dataclass
 class Menu:
-    pass
+    children: list
 
 
 @dataclass
@@ -140,6 +142,12 @@ class Jump:
 class Condition:
     kind: str
     condition: str
+    children: list
+
+
+@dataclass
+class Script:
+    children: list
 
 
 @dataclass
@@ -148,7 +156,7 @@ class Block:
     children: list
 
 
-class DialogueTransformer(Transformer):
+class RenpyTransformer(Transformer):
     def body(self, children):
         result = []
         skip = False
@@ -177,42 +185,36 @@ class DialogueTransformer(Transformer):
     def block(self, children):
         header, body = children
         num_sub = len([sub for sub in body.children if sub])
-        # strip empty subtrees
-        if num_sub == 0:
-            return Discard
-        return Block(header=header, children=body.children)
-
-    def CHOICE(self, token):
-        search = choice_re.search(token.value)
-        return Choice(**search.groupdict())
-
-    def LABEL(self, token):
-        search = label_re.search(token.value)
-        return Label(**search.groupdict())
-
-    def MENU(self, token):
-        return Menu()
+        match header:
+            case Token("LABEL"):
+                return Label(**label_re.search(header.value).groupdict(), children=body.children)
+            case Token("MENU"):
+                return Menu(children=body.children)
+            case Token("CHOICE"):
+                return Choice(**choice_re.search(header.value).groupdict(), children=body.children)
+            case Token("CONDITION"):
+                return Condition(
+                    **condition_re.search(header.value).groupdict(), children=body.children
+                )
+            case _:
+                return Block(header=header, children=body.children)
 
     def JUMP(self, token):
         search = jump_re.search(token.value)
         return Jump(**search.groupdict())
-
-    def CONDITION(self, token):
-        search = condition_re.search(token.value)
-        return Condition(**search.groupdict())
 
     def LINE(self, token):
         # strip lines that weren't assigned a token
         return Discard
 
     def start(self, items):
-        return Block(header="start", children=items)
+        return Script(children=items)
 
 
 def parse_script(path: Path) -> Tree:
     script = path.read_text()
     tree = build_script_tree(script)
-    return DialogueTransformer().transform(tree)
+    return RenpyTransformer().transform(tree)
 
 
 @app.command("parse")
