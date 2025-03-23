@@ -9,8 +9,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 dependencies = [
+    "audiofile>=1.5.1",
+    "audresample>=1.3.3",
+    "csm-mlx",
     "lark>=1.2.2",
     "marimo>=0.11.20",
+    "mutagen>=1.47.0",
     "polars>=1.25.2",
     "pytest>=8.3.5",
     "pytest-watcher>=0.4.3",
@@ -44,4 +48,7 @@ princess = "princess.cli:app"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.uv.sources]
+csm-mlx = { git = "https://github.com/senstella/csm-mlx" }
 
