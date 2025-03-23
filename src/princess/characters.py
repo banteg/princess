@@ -33,7 +33,7 @@ def extract_characters(game_path=None):
                 if match := CHARACTER_RE.search(line.lstrip()):
                     yield Character(**match.groupdict())
 
-    return list(extract_inner())
+    return {c.id: c for c in extract_inner()}
 
 
 @app.command("characters")
@@ -41,8 +41,9 @@ def print_characters():
     characters = extract_characters()
     rich.print(characters)
     for c in characters:
-        print(c)
-    print(len(characters))
+        print(c, characters[c], sep=" - ")
+
+    print(f"\nextracted {len(characters)} characters")
 
 
 if __name__ == "__main__":
