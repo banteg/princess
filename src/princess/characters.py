@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 import rich
@@ -24,6 +25,7 @@ class Character:
         return self.id
 
 
+@cache
 def extract_characters(game_path=None):
     def extract_inner():
         for path in walk_script_files(game_path):
