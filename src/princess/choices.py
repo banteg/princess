@@ -85,7 +85,9 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
                 results.append(cr)
 
                 # Step C: For nested blocks, we append the current choice to the path
-                new_path = path[:] + [node]
+                new_path = path[:] + [
+                    Choice(line=ln, choice=choice_text, condition=cond, children=[])
+                ]
 
                 # Now walk deeper (unless next is a junction)
                 for child in cc:
