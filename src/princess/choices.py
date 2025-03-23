@@ -19,7 +19,7 @@ class ChoiceResult:
     choice: str
     condition: str | None
     label: str | None
-    previous_dialogues: list[Dialogue]
+    previous_dialogues: list[Dialogue | Choice]
     subsequent_dialogues: list[Dialogue]
 
 
