@@ -175,7 +175,7 @@ def process_choices(path: Path, force: bool = False):
         rich.print(f"[magenta]Voiced: [bold blue]{text}")
         print_dialogues(item.subsequent_dialogues[:3])
 
-        signal = sesame(text, hero_context, output)
+        sesame(text, hero_context, output)
         rich.print(f"{prefix} [green]saved {output}\n")
 
 
