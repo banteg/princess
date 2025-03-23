@@ -10,9 +10,14 @@ from csm_mlx import CSM, Segment, csm_1b, generate
 from huggingface_hub import hf_hub_download
 from mlx_lm.sample_utils import make_sampler
 from mutagen.flac import FLAC
+from princess.game import get_game_path
 
 app = typer.Typer()
 target_sample_rate = 24_000
+
+rewrites = {
+    "N-no. I w-won't t-tell you.": "No, I won't tell you.",
+}
 
 
 def clean_choice_for_voice(choice):
@@ -47,10 +52,6 @@ def clean_choice_for_voice(choice):
     if special_re.search(choice):
         return None
 
-    rewrites = {
-        "N-no. I w-won't t-tell you.": "No, I won't tell you.",
-    }
-
     return rewrites.get(choice, choice) if choice else None
 
 
@@ -69,7 +70,26 @@ def load_segment(audio: Path, text: str, speaker: int = 0) -> Segment:
     return Segment(speaker=speaker, text=text, audio=data)
 
 
-def sesame(text: str, context: list[Segment], output: Path, max_length: float = 15.0):
+@cache
+def load_hero_context():
+    base = get_game_path()
+    return [
+        load_segment(
+            base / "audio/voices/ch1/woods/hero/script_h_2.flac",
+            "We can't just go through with this and listen to Him. She's a princess. We're supposed to save princesses, not slay them.",
+        ),
+        load_segment(
+            base / "audio/voices/ch1/woods/hero/script_h_4.flac",
+            "We're not going to go through with this, right? She's a princess. We're supposed to save princesses, not slay them.",
+        ),
+        load_segment(
+            base / "audio/voices/ch1/knife/hero/k_h_9.flac",
+            "It's fine. We can decide what we want to do after we talk to her. Maybe she really is a monster. But killing someone in cold blood isn't very becoming of us.",
+        ),
+    ]
+
+
+def sesame(text: str, context: list[Segment], output: Path, max_length: float = 10.0):
     model = load_model()
     sampler = make_sampler(temp=0.9, top_k=50)
     signal = generate(
@@ -91,7 +111,8 @@ def sesame(text: str, context: list[Segment], output: Path, max_length: float = 
 
 @app.command("sesame")
 def main(text: str, output: Path = "output/sesame.flac"):
-    sesame(text, [], output)
+    context = load_hero_context()
+    sesame(text, context, output)
 
 
 if __name__ == "__main__":
