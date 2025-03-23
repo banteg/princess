@@ -29,7 +29,7 @@ voice_re = re.compile(r"^\s*voice \"(?P<voice>[^\"]+)\"$")
 dialogue_re = re.compile(
     r"^\s*(?P<character>" + "|".join(CHARACTERS) + r') "(?P<dialogue>[^"]+)"( id .*)?$'
 )
-choice_re = re.compile(r'^\s*"(?P<choice>(?:\{i\})?•[^"]+)"(?: if (?P<condition>.+))?:$')
+choice_re = re.compile(r'^\s*"(?P<choice>[^"]+)"(?:\s*if (?P<condition>.+))?\s*:$')
 condition_re = re.compile(r"^\s*(?P<kind>if|elif|else)\s*(?P<condition>.*):$")
 
 
@@ -202,7 +202,7 @@ class RenpyTransformer(Transformer):
                     **condition_re.search(header.value).groupdict(), children=body.children
                 )
             case _:
-                return Block(header=header, children=body.children)
+                raise ValueError("unknown header type: " + header.type)
 
     def JUMP(self, token):
         search = jump_re.search(token.value)
