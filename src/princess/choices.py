@@ -1,7 +1,10 @@
-# Stage 3: Extract choices
-# Here we extract choices and their surrounding dialogue by traversing the tree.
-# The resulting list can be used for text-to-speech generation.
-from dataclasses import asdict, dataclass
+"""
+Stage 3: Extract choices
+We extract choices and their surrounding dialogue by traversing the Script tree.
+The resulting list can be used for text-to-speech generation.
+"""
+
+from dataclasses import dataclass
 from pathlib import Path
 
 import rich
@@ -20,14 +23,6 @@ class ChoiceResult:
     subsequent_dialogues: list[Dialogue]
 
 
-def is_junction(node) -> bool:
-    match node:
-        case Menu() | Condition() | Jump():
-            return True
-        case _:
-            return False
-
-
 def extract_choices(script: Script) -> list[ChoiceResult]:
     results: list[ChoiceResult] = []
 
@@ -38,36 +33,20 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
         """
 
         match node:
-            # 1) Top-level script
-            case Script(children=ch):
-                for c in ch:
-                    walk(c, path, current_label)
-
-            # 2) Label
-            case Label(line=ln, label=lbl, children=ch):
-                # Recurse into children, preserving the path exactly,
-                # so we don't double-append a line.
-                for child in ch:
-                    walk(child, path, lbl)
-
-            # 3) Menu (just traverse children)
-            case Menu(line=ln, children=ch):
-                for child in ch:
+            case Script() | Menu() | Condition():
+                for child in node.children:
                     walk(child, path, current_label)
 
-            # 4) Condition (like if/elif/else)
-            case Condition(line=ln, kind=k, condition=cond, children=ch):
-                for child in ch:
-                    walk(child, path, current_label)
+            case Label(label=new_label):
+                for child in node.children:
+                    walk(child, path, new_label)
 
-            # 5) Dialogue => add to path
             case Dialogue():
                 path.append(node)
 
-            # 6) Choice => produce a ChoiceResult, then recurse with the choice in path
             case Choice(line=ln, choice=choice_text, condition=cond, children=cc):
                 # Step A: gather subsequent dialogues from 'cc'
-                subs = collect_dialogues_until_junction(cc)
+                subs = list(collect_dialogues_until_junction(cc))
 
                 # Step B: build a ChoiceResult
                 cr = ChoiceResult(
@@ -75,11 +54,7 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
                     choice=choice_text,
                     condition=cond,
                     label=current_label,
-                    # The test wants parent’s choice also in “previous_dialogues”
-                    # so we keep both Dialogue and Choice from the path
-                    previous_dialogues=[
-                        x for x in path if isinstance(x, Dialogue) or isinstance(x, Choice)
-                    ],
+                    previous_dialogues=path[:],
                     subsequent_dialogues=subs,
                 )
                 results.append(cr)
@@ -90,36 +65,24 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
 
                 # Now walk deeper (unless next is a junction)
                 for child in cc:
-                    if not is_junction(child):
-                        walk(child, new_path, current_label)
+                    walk(child, new_path, current_label)
 
-            # 7) Jump => skip or treat as a stop
-            case Jump():
-                pass
-
-            # fallback
-            case _:
-                raise ValueError(f"Unknown node type: {node}")
-
-    # Kick off with an empty path
     walk(script, [], None)
     return results
 
 
 def collect_dialogues_until_junction(children: list) -> list[Dialogue]:
-    found = []
     for child in children:
         # 1) If child is a junction (Menu, Condition, Jump, etc.), STOP
-        if is_junction(child):
-            break
         match child:
+            case Menu() | Condition() | Jump():
+                return
             case Dialogue():
-                found.append(child)
+                yield child
             case Label(children=subchildren):
                 # Recurse further
                 sub_found = collect_dialogues_until_junction(subchildren)
-                found.extend(sub_found)
-    return found
+                yield from sub_found
 
 
 def extract_choices_from_script(path: Path):
