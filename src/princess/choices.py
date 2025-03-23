@@ -10,7 +10,10 @@ from pathlib import Path
 import rich
 import typer
 
+from princess.game import walk_script_files
 from princess.parser import Choice, Condition, Dialogue, Jump, Label, Menu, Script, parse_script
+
+app = typer.Typer()
 
 
 @dataclass
@@ -85,12 +88,28 @@ def collect_dialogues_until_junction(children: list) -> list[Dialogue]:
                 yield from sub_found
 
 
+@app.command("choices")
 def extract_choices_from_script(path: Path):
     script = parse_script(path)
     choices = extract_choices(script)
     rich.print(choices)
+    rich.print(f"Extracted {len(choices)} choices")
     return choices
 
 
+@app.command("all-choices")
+def extract_all_choices():
+    extracted = []
+    for path in walk_script_files():
+        script = parse_script(path)
+        choices = extract_choices(script)
+        rich.print(choices)
+        rich.print(f"Extracted {len(choices)} choices")
+        extracted.extend(choices)
+
+    rich.print(f"Extracted {len(extracted)} choices")
+    return extracted
+
+
 if __name__ == "__main__":
-    typer.run(extract_choices_from_script)
+    app()

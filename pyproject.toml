@@ -13,6 +13,7 @@ dependencies = [
     "marimo>=0.11.20",
     "polars>=1.25.2",
     "pytest>=8.3.5",
+    "pytest-watcher>=0.4.3",
     "rich>=13.9.4",
     "ruff>=0.11.0",
     "sqlite-utils>=3.38",
@@ -38,6 +39,7 @@ allow-direct-references = true
 
 [project.scripts]
 princess-tts = "princess.tts.cli:main"
+princess = "princess.cli:app"
 
 [tool.ruff]
 line-length = 100
