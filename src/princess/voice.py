@@ -18,6 +18,7 @@ from rich.progress import track
 from princess.choices import ChoiceResult, extract_choices_from_script
 from princess.game import get_game_path
 from princess.parser import Choice, Dialogue
+from princess.characters import extract_characters
 
 app = typer.Typer()
 target_sample_rate = 24_000
@@ -65,6 +66,7 @@ def clean_choice_for_voice(choice):
 def strip_formatting(text: str):
     text = re.sub(r"\{[^}]+\}", "", text)
     text = text.replace("''", '"')
+    text = text.replace("\\n", "")
     return text
 
 
@@ -137,12 +139,13 @@ def get_output_path(choice: ChoiceResult) -> Path:
 
 
 def print_dialogues(items: list[Dialogue | Choice]):
+    characters = extract_characters()
     for item in items:
         match item:
             case Dialogue(character=character, dialogue=dialogue):
-                rich.print(f"[blue]{character}[/]: [dim]{strip_formatting(dialogue)}")
+                rich.print(f"[yellow]{characters[character]}[/]: [dim]{strip_formatting(dialogue)}")
             case Choice(choice=choice):
-                rich.print(f"[magenta]choice: {strip_formatting(choice)}")
+                rich.print(f"[red]Choice:[/] [dim]{strip_formatting(choice)}")
 
 
 @app.command("process")
@@ -153,21 +156,21 @@ def process_choices(path: Path, force: bool = False):
         prefix = f"{i}/{len(choices)}"
         text = clean_choice_for_voice(item.choice)
         if text is None:
-            rich.print(f"{prefix} [dim]no spoken words: {item.choice}")
+            rich.print(f"{prefix} [dim]no spoken words: {strip_formatting(item.choice)}")
             continue
 
         output = get_output_path(item)
         if output.exists() and not force:
-            rich.print(f"{prefix} [yellow]file exists: {item.choice}")
+            rich.print(f"{prefix} [yellow]file exists: {strip_formatting(item.choice)}")
             continue
 
         rich.print(f"{prefix} [green]generating:[/]")
         print_dialogues(item.previous_dialogues[-3:])
-        rich.print(f"choice: {strip_formatting(item.choice)}")
-        rich.print(f"voiced: [bold magenta]{text}")
+        rich.print(f"[magenta]Choice:[/] {strip_formatting(item.choice)}")
+        rich.print(f"[magenta]Voiced: [bold blue]{text}")
         print_dialogues(item.subsequent_dialogues[:3])
 
-        # signal = sesame(text, hero_context, output)
+        signal = sesame(text, hero_context, output)
         rich.print(f"{prefix} [green]saved {output}\n")
 
 
