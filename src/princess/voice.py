@@ -1,3 +1,8 @@
+"""
+Stage 4: Generate voices
+Clean up the choices we have extracted and generate voice files.
+"""
+
 import re
 from functools import cache
 from hashlib import sha256
