@@ -1,20 +1,22 @@
 import re
 from functools import cache
+from hashlib import sha256
 from pathlib import Path
 
 import audiofile
 import audresample
 import mlx.core as mx
+import rich
+import sounddevice
 import typer
 from csm_mlx import CSM, Segment, csm_1b, generate
 from huggingface_hub import hf_hub_download
 from mlx_lm.sample_utils import make_sampler
 from mutagen.flac import FLAC
-import subprocess
-import sounddevice
+from rich.progress import track
 
+from princess.choices import ChoiceResult, extract_choices_from_script
 from princess.game import get_game_path
-from princess.choices import extract_choices_from_script
 
 app = typer.Typer()
 target_sample_rate = 24_000
@@ -109,19 +111,50 @@ def sesame(text: str, context: list[Segment], output: Path, max_length: float = 
     return signal
 
 
+def play_signal(signal):
+    sounddevice.play(signal, target_sample_rate)
+    sounddevice.wait()
+
+
 @app.command("generate")
 def generate_line(text: str, output: Path = "output/sesame.flac", play: bool = False):
     context = load_hero_context()
     signal = sesame(text, context, output)
     if play:
-        sounddevice.play(signal, target_sample_rate)
-        sounddevice.wait()
+        play_signal(signal)
+
+
+def get_output_path(choice: ChoiceResult) -> Path:
+    choice_hash = sha256(choice.choice.encode()).hexdigest()
+    return Path("output/voice") / f"{choice_hash}.flac"
 
 
 @app.command("process")
-def process_choices(path: Path):
+def process_choices(path: Path, force: bool = False):
+    hero_context = load_hero_context()
     choices = extract_choices_from_script(path)
-    print(len(choices))
+    for i, item in enumerate(track(choices), 1):
+        prefix = f"{i}/{len(choices)}"
+        text = clean_choice_for_voice(item.choice)
+        if text is None:
+            rich.print(f"{prefix} [dim]no spoken words: {item.choice}")
+            continue
+
+        output = get_output_path(item)
+        if output.exists() and not force:
+            rich.print(f"{prefix} [yellow]file exists: {item.choice}")
+            continue
+
+        rich.print(f"{prefix} [green]generating:[/]")
+        for say in item.previous_dialogues[-3:]:
+            rich.print(f"[blue]{say.character}[/]: [dim]{say.dialogue}")
+        rich.print(f"choice: {item.choice}")
+        rich.print(f"voiced: [magenta]{text}")
+        for say in item.subsequent_dialogues[:3]:
+            rich.print(f"[blue]{say.character}[/]: [dim]{say.dialogue}")
+
+        signal = sesame(text, hero_context, output)
+        rich.print(f"{prefix} [green]saved {output}")
 
 
 if __name__ == "__main__":
