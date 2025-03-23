@@ -186,8 +186,14 @@ class RenpyTransformer(Transformer):
 
     def block(self, children):
         header, body = children
-        if self.check_empty(body.children):
-            return Discard
+        # strip blocks with no children, but always keep choices
+        match header:
+            case Token("CHOICE"):
+                pass
+            case _ if self.check_empty(body.children):
+                print(f"Discarding empty block: {header} {body.children}")
+                return Discard
+
         match header:
             case Token("LABEL"):
                 return Label(
