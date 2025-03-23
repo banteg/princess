@@ -61,7 +61,7 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
             case Label(label=lbl, children=ch):
                 # update label context
                 for child in ch:
-                    walk(child, prev_dialogues[:], lbl)
+                    walk(child, prev_dialogues, lbl)
 
             # A menu node => look for choice among children
             case Menu(children=ch):
