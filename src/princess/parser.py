@@ -182,9 +182,14 @@ class RenpyTransformer(Transformer):
             result.append(children[-1])
         return Tree("body", result)
 
+    def check_empty(self, children):
+        # remove blocks with no children or blocks that only contain a jump
+        return len([sub for sub in children if sub and not isinstance(sub, Jump)]) == 0
+
     def block(self, children):
         header, body = children
-        num_sub = len([sub for sub in body.children if sub])
+        if self.check_empty(body.children):
+            return Discard
         match header:
             case Token("LABEL"):
                 return Label(**label_re.search(header.value).groupdict(), children=body.children)
