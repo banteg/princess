@@ -10,7 +10,11 @@ from csm_mlx import CSM, Segment, csm_1b, generate
 from huggingface_hub import hf_hub_download
 from mlx_lm.sample_utils import make_sampler
 from mutagen.flac import FLAC
+import subprocess
+import sounddevice
+
 from princess.game import get_game_path
+from princess.choices import extract_choices_from_script
 
 app = typer.Typer()
 target_sample_rate = 24_000
@@ -82,10 +86,6 @@ def load_hero_context():
             base / "audio/voices/ch1/woods/hero/script_h_4.flac",
             "We're not going to go through with this, right? She's a princess. We're supposed to save princesses, not slay them.",
         ),
-        load_segment(
-            base / "audio/voices/ch1/knife/hero/k_h_9.flac",
-            "It's fine. We can decide what we want to do after we talk to her. Maybe she really is a monster. But killing someone in cold blood isn't very becoming of us.",
-        ),
     ]
 
 
@@ -106,13 +106,22 @@ def sesame(text: str, context: list[Segment], output: Path, max_length: float = 
     audio["TITLE"] = text
     audio.save()
 
-    return output
+    return signal
 
 
-@app.command("sesame")
-def main(text: str, output: Path = "output/sesame.flac"):
+@app.command("generate")
+def generate_line(text: str, output: Path = "output/sesame.flac", play: bool = False):
     context = load_hero_context()
-    sesame(text, context, output)
+    signal = sesame(text, context, output)
+    if play:
+        sounddevice.play(signal, target_sample_rate)
+        sounddevice.wait()
+
+
+@app.command("process")
+def process_choices(path: Path):
+    choices = extract_choices_from_script(path)
+    print(len(choices))
 
 
 if __name__ == "__main__":

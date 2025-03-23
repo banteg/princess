@@ -9,7 +9,7 @@ app = typer.Typer()
 app.add_typer(princess.choices.app)
 app.add_typer(princess.parser.app)
 app.add_typer(princess.characters.app)
-app.add_typer(princess.voice.app)
+app.add_typer(princess.voice.app, name="sesame")
 
 
 if __name__ == "__main__":
