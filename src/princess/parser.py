@@ -191,7 +191,6 @@ class RenpyTransformer(Transformer):
             case Token("CHOICE"):
                 pass
             case _ if self.check_empty(body.children):
-                print(f"Discarding empty block: {header} {body.children}")
                 return Discard
 
         match header:
