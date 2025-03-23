@@ -17,6 +17,7 @@ from rich.progress import track
 
 from princess.choices import ChoiceResult, extract_choices_from_script
 from princess.game import get_game_path
+from princess.parser import Choice, Dialogue
 
 app = typer.Typer()
 target_sample_rate = 24_000
@@ -59,6 +60,12 @@ def clean_choice_for_voice(choice):
         return None
 
     return rewrites.get(choice, choice) if choice else None
+
+
+def strip_formatting(text: str):
+    text = re.sub(r"\{[^}]+\}", "", text)
+    text = text.replace("''", '"')
+    return text
 
 
 @cache
@@ -129,6 +136,15 @@ def get_output_path(choice: ChoiceResult) -> Path:
     return Path("output/voice") / f"{choice_hash}.flac"
 
 
+def print_dialogues(items: list[Dialogue | Choice]):
+    for item in items:
+        match item:
+            case Dialogue(character=character, dialogue=dialogue):
+                rich.print(f"[blue]{character}[/]: [dim]{strip_formatting(dialogue)}")
+            case Choice(choice=choice):
+                rich.print(f"[magenta]choice: {strip_formatting(choice)}")
+
+
 @app.command("process")
 def process_choices(path: Path, force: bool = False):
     hero_context = load_hero_context()
@@ -146,15 +162,13 @@ def process_choices(path: Path, force: bool = False):
             continue
 
         rich.print(f"{prefix} [green]generating:[/]")
-        for say in item.previous_dialogues[-3:]:
-            rich.print(f"[blue]{say.character}[/]: [dim]{say.dialogue}")
-        rich.print(f"choice: {item.choice}")
-        rich.print(f"voiced: [magenta]{text}")
-        for say in item.subsequent_dialogues[:3]:
-            rich.print(f"[blue]{say.character}[/]: [dim]{say.dialogue}")
+        print_dialogues(item.previous_dialogues[-3:])
+        rich.print(f"choice: {strip_formatting(item.choice)}")
+        rich.print(f"voiced: [bold magenta]{text}")
+        print_dialogues(item.subsequent_dialogues[:3])
 
-        signal = sesame(text, hero_context, output)
-        rich.print(f"{prefix} [green]saved {output}")
+        # signal = sesame(text, hero_context, output)
+        rich.print(f"{prefix} [green]saved {output}\n")
 
 
 if __name__ == "__main__":
