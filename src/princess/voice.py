@@ -20,10 +20,10 @@ from mlx_lm.sample_utils import make_sampler
 from mutagen.flac import FLAC
 from rich.progress import track
 
+from princess.characters import extract_characters
 from princess.choices import ChoiceResult, extract_choices_from_script
 from princess.game import get_game_path
 from princess.parser import Choice, Dialogue
-from princess.characters import extract_characters
 
 app = typer.Typer()
 target_sample_rate = 24_000
