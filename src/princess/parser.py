@@ -230,6 +230,7 @@ def parse_script(path: Path) -> Tree:
 def parse_and_print(path: Path) -> Tree:
     tree = parse_script(path)
     rich.print(tree)
+    Path("output/script_tree.json").write_text(tree.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

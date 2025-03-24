@@ -27,6 +27,10 @@ class ChoiceResult(BaseModel):
     line: int | None = None
 
 
+class ChoiceResultList(BaseModel):
+    choices: list[ChoiceResult]
+
+
 def extract_choices(script: Script, script_path: str | None = None) -> list[ChoiceResult]:
     results: list[ChoiceResult] = []
 
