@@ -7,7 +7,7 @@ import pickle
 from enum import Enum
 from pathlib import Path
 import subprocess
-
+import time
 import audiofile
 import numpy as np
 import sounddevice
@@ -15,6 +15,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from sqlite_utils import Database
+import pygame
 
 from princess.game import get_game_path
 from princess.models import Dialogue
@@ -22,6 +23,9 @@ from princess.text import print_choice_context, strip_formatting
 
 app = typer.Typer()
 console = Console()
+
+pygame.init()
+pygame.mixer.init()
 
 
 class AnnotationStatus(str, Enum):
@@ -161,7 +165,11 @@ def display_annotation_progress(db):
 
 
 def play_audio(audio_path):
-    subprocess.call(["ffplay", "-nodisp", "-autoexit", "-hide_banner", audio_path])
+    # pygame is the only method that doesn't cut-off the audio at the end
+    pygame.mixer.music.load(audio_path)
+    pygame.mixer.music.play()
+    while pygame.mixer.music.get_busy():
+        continue
 
 
 def play_context_and_choice(choice, previous_count=1):
@@ -309,7 +317,7 @@ def annotate(
             try:
                 action = input("\nChoose action: ").strip().lower() or default_choice
 
-                if action in ["a", "r", "s", "p", "p1", "p2", "p3", "n", "q"]:
+                if action in ["a", "r", "s", "p", "1", "2", "3", "n", "q"]:
                     if action == "a":
                         save_annotation(db, filename, AnnotationStatus.APPROVE)
                         console.print("[green]Marked as APPROVED[/]")
@@ -326,13 +334,13 @@ def annotate(
                     elif action == "p":
                         console.print("\n[cyan]Playing choice audio...[/]")
                         play_audio(choice.output)
-                    elif action == "p1":
+                    elif action == "1":
                         console.print("\n[cyan]Playing with 1 previous line...[/]")
                         play_context_and_choice(choice, 1)
-                    elif action == "p2":
+                    elif action == "2":
                         console.print("\n[cyan]Playing with 2 previous lines...[/]")
                         play_context_and_choice(choice, 2)
-                    elif action == "p3":
+                    elif action == "3":
                         console.print("\n[cyan]Playing with 3 previous lines...[/]")
                         play_context_and_choice(choice, 3)
                     elif action == "n":
@@ -343,7 +351,7 @@ def annotate(
                         return
                 else:
                     console.print(
-                        "[red]Invalid action. Please choose one of: a, r, s, p, p1, p2, p3, n, q[/]"
+                        "[red]Invalid action. Please choose one of: a, r, s, p, 1, 2, 3, n, q[/]"
                     )
             except KeyboardInterrupt:
                 console.print("[yellow]\nQuitting annotation...[/]")
