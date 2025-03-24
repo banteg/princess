@@ -21,7 +21,7 @@ from princess.characters import extract_characters
 from princess.choices import ChoiceResult
 from princess.game import get_game_path
 from princess.parser import Choice, Dialogue
-from princess.text import strip_formatting
+from princess.text import print_choice_context, strip_formatting
 
 app = typer.Typer()
 target_sample_rate = 24_000
@@ -112,10 +112,7 @@ def generate_choice_audio(choice: ChoiceResult, force: bool = False):
         return
 
     rich.print("[green]generating...[/]")
-    print_dialogues(choice.previous_dialogues[-3:])
-    rich.print(f"[magenta]Choice:[/] {strip_formatting(choice.choice)}")
-    rich.print(f"[magenta]Voiced: [bold blue]{choice.clean}")
-    print_dialogues(choice.subsequent_dialogues[:3])
+    print_choice_context(choice)
 
     sesame(choice.clean, load_hero_context(), choice.output)
     rich.print(f"[green]saved {choice.output}\n")

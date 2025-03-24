@@ -53,19 +53,24 @@ def clean_choice_for_voice(choice: str) -> str | None:
     return rewrites.get(choice, choice) if choice else None
 
 
-
-def print_dialogues(items: list[Dialogue | Choice]):
+def print_dialogue(item: Dialogue | Choice, offset: int | None = None):
     characters = extract_characters()
-    for item in items:
-        match item:
-            case Dialogue(character=character, dialogue=dialogue):
-                rich.print(f"[yellow]{characters[character]}[/]: [dim]{strip_formatting(dialogue)}")
-            case Choice(choice=choice):
-                rich.print(f"[red]Choice:[/] [dim]{strip_formatting(choice)}")
+    offset_text = f"[blue]{offset:>2}[/] " if offset is not None else ""
+    
+    match item:
+        case Dialogue(character=character, dialogue=dialogue):
+            rich.print(f"{offset_text}[yellow]{characters[character]}[/]: [dim]{strip_formatting(dialogue)}")
+        case Choice(choice=choice):
+            rich.print(f"{offset_text}[red]Choice:[/] [dim]{strip_formatting(choice)}")
 
 
 def print_choice_context(choice: ChoiceResult):
-    print_dialogues(choice.previous_dialogues[-3:])
-    rich.print(f"[magenta]Choice:[/] {strip_formatting(choice.choice)}")
+    for i, dialogue in enumerate(choice.previous_dialogues[-3:]):
+        offset = i - len(choice.previous_dialogues[-3:])
+        print_dialogue(dialogue, offset)
+    
+    rich.print(f"[blue] 0[/] [magenta]Choice:[/] {strip_formatting(choice.choice)}")
     rich.print(f"[magenta]Voiced: [bold blue]{choice.clean}")
-    print_dialogues(choice.subsequent_dialogues[:3])
+    
+    for i, dialogue in enumerate(choice.subsequent_dialogues[:3], 1):
+        print_dialogue(dialogue, i)
