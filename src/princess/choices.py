@@ -25,10 +25,12 @@ class ChoiceResult(BaseModel):
     subsequent_dialogues: list[Dialogue]
     path: str | None = None
     line: int | None = None
+    clean: str | None = None
+    output: Path | None = None
 
 
 class ChoiceResultList(BaseModel):
-    choices: list[ChoiceResult]
+    choices: list[ChoiceResult] = []
 
 
 def extract_choices(script: Script, script_path: str | None = None) -> list[ChoiceResult]:

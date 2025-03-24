@@ -33,7 +33,7 @@ rewrites = {
 }
 
 
-def clean_choice_for_voice(choice):
+def clean_choice_for_voice(choice: str) -> str | None:
     """
     Clean menu choice text for text-to-speech processing.
 
@@ -153,30 +153,31 @@ def print_dialogues(items: list[Dialogue | Choice]):
                 rich.print(f"[red]Choice:[/] [dim]{strip_formatting(choice)}")
 
 
+def generate_choice_audio(choice: ChoiceResult, force: bool = False):
+    text = clean_choice_for_voice(choice.choice)
+    if text is None:
+        return
+
+    output = get_output_path(choice)
+    if output.exists() and not force:
+        rich.print(f"[yellow]file exists: {strip_formatting(choice.choice)}")
+        return
+
+    rich.print("[green]generating...[/]")
+    print_dialogues(choice.previous_dialogues[-3:])
+    rich.print(f"[magenta]Choice:[/] {strip_formatting(choice.choice)}")
+    rich.print(f"[magenta]Voiced: [bold blue]{text}")
+    print_dialogues(choice.subsequent_dialogues[:3])
+
+    sesame(text, load_hero_context(), output)
+    rich.print(f"[green]saved {output}\n")
+
+
 @app.command("process")
 def process_choices(path: Path, force: bool = False):
-    hero_context = load_hero_context()
     choices = extract_choices_from_script(path)
     for i, item in enumerate(track(choices), 1):
-        prefix = f"{i}/{len(choices)}"
-        text = clean_choice_for_voice(item.choice)
-        if text is None:
-            rich.print(f"{prefix} [dim]no spoken words: {strip_formatting(item.choice)}")
-            continue
-
-        output = get_output_path(item)
-        if output.exists() and not force:
-            rich.print(f"{prefix} [yellow]file exists: {strip_formatting(item.choice)}")
-            continue
-
-        rich.print(f"{prefix} [green]generating:[/]")
-        print_dialogues(item.previous_dialogues[-3:])
-        rich.print(f"[magenta]Choice:[/] {strip_formatting(item.choice)}")
-        rich.print(f"[magenta]Voiced: [bold blue]{text}")
-        print_dialogues(item.subsequent_dialogues[:3])
-
-        sesame(text, hero_context, output)
-        rich.print(f"{prefix} [green]saved {output}\n")
+        generate_choice_audio(item, force)
 
 
 if __name__ == "__main__":
