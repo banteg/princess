@@ -45,8 +45,64 @@ def setup_db():
         
         # Add default index on status
         db["annotations"].create_index(["status"])
+        
+        # Initialize with existing choices
+        console.print("[cyan]New database created, initializing with existing choices...[/]")
+        initialize_db_with_choices(db)
+    else:
+        # Check for new choices that aren't in the database yet
+        update_db_with_new_choices(db)
     
     return db
+
+
+def initialize_db_with_choices(db):
+    """Initialize the database with all existing choices."""
+    try:
+        choices = load_choices()
+        
+        # Add each choice to the database with PENDING status
+        rows = []
+        for choice in choices.choices:
+            if choice.output:
+                rows.append({
+                    "filename": choice.output.name,
+                    "status": AnnotationStatus.PENDING,
+                    "notes": None
+                })
+        
+        if rows:
+            db["annotations"].insert_all(rows, pk="filename")
+            console.print(f"[green]Initialized database with {len(rows)} choices[/]")
+        else:
+            console.print("[yellow]No choices found for initialization[/]")
+    except Exception as e:
+        console.print(f"[red]Error initializing database: {e}[/]")
+
+
+def update_db_with_new_choices(db):
+    """Update the database with any new choices that aren't already in it."""
+    try:
+        choices = load_choices()
+        
+        # Get all existing filenames in the database
+        existing_filenames = set(row["filename"] for row in db["annotations"].rows)
+        
+        # Find new choices that aren't in the database
+        new_rows = []
+        for choice in choices.choices:
+            if choice.output and choice.output.name not in existing_filenames:
+                new_rows.append({
+                    "filename": choice.output.name,
+                    "status": AnnotationStatus.PENDING,
+                    "notes": None
+                })
+        
+        if new_rows:
+            db["annotations"].insert_all(new_rows, pk="filename")
+            console.print(f"[green]Added {len(new_rows)} new choices to the database[/]")
+    except Exception as e:
+        console.print(f"[red]Error updating database with new choices: {e}[/]")
 
 
 def load_choices():
