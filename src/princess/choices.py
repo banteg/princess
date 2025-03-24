@@ -4,15 +4,17 @@ We extract choices and their surrounding dialogue by traversing the Script tree.
 The resulting list can be used for text-to-speech generation.
 """
 
+from hashlib import sha256
 from pathlib import Path
-import json
+
 import rich
 import typer
+from pydantic import BaseModel
 from rich.progress import track
 
-from princess.game import walk_script_files, get_game_path
+from princess.game import get_game_path, walk_script_files
 from princess.parser import Choice, Condition, Dialogue, Jump, Label, Menu, Script, parse_script
-from pydantic import BaseModel
+from princess.text import clean_choice_for_voice
 
 app = typer.Typer()
 
@@ -25,8 +27,16 @@ class ChoiceResult(BaseModel):
     subsequent_dialogues: list[Dialogue]
     path: str | None = None
     line: int | None = None
-    clean: str | None = None
     output: Path | None = None
+    clean: str | None = None
+
+    @property
+    def hash(self) -> str:
+        return sha256(self.choice.encode()).hexdigest()
+
+    def model_post_init(self, __context):
+        self.output = self.output or Path("output/voice") / f"{self.hash}.flac"
+        self.clean = self.clean or clean_choice_for_voice(self.choice)
 
 
 class ChoiceResultList(BaseModel):
@@ -104,7 +114,9 @@ def extract_choices_from_script(path: Path):
     choices = extract_choices(script, script_path=relative_path)
     rich.print(choices)
     rich.print(f"Extracted {len(choices)} choices")
-    Path("output/choices.json").write_text(ChoiceResultList(choices=choices).model_dump_json(indent=2))
+    Path("output/choices.json").write_text(
+        ChoiceResultList(choices=choices).model_dump_json(indent=2)
+    )
     return choices
 
 
