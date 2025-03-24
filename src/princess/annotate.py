@@ -20,6 +20,7 @@ import pygame
 from princess.game import get_game_path
 from princess.models import Dialogue
 from princess.text import print_choice_context, strip_formatting
+from princess.voice import generate_choice_audio
 
 app = typer.Typer()
 console = Console()
@@ -33,6 +34,7 @@ class AnnotationStatus(str, Enum):
     REJECT = "reject"
     SPECIAL = "special"
     PENDING = "pending"
+    REGENERATED = "regenerated"
 
 
 def setup_db():
@@ -149,6 +151,7 @@ def display_annotation_progress(db):
     rejected = status_counts.get(AnnotationStatus.REJECT, 0)
     special = status_counts.get(AnnotationStatus.SPECIAL, 0)
     pending = status_counts.get(AnnotationStatus.PENDING, 0)
+    regenerated = status_counts.get(AnnotationStatus.REGENERATED, 0)
 
     table = Table(title="Annotation Progress")
     table.add_column("Status", style="cyan")
@@ -158,6 +161,7 @@ def display_annotation_progress(db):
     table.add_row("Approved", str(approved), f"{approved / total * 100:.2f}%" if total else "0%")
     table.add_row("Rejected", str(rejected), f"{rejected / total * 100:.2f}%" if total else "0%")
     table.add_row("Special", str(special), f"{special / total * 100:.2f}%" if total else "0%")
+    table.add_row("Regenerated", str(regenerated), f"{regenerated / total * 100:.2f}%" if total else "0%")
     table.add_row("Pending", str(pending), f"{pending / total * 100:.2f}%" if total else "0%")
     table.add_row("Total", str(total), "100%")
 
@@ -235,6 +239,116 @@ def get_annotation_status(db, filename):
     return row["status"] if row else AnnotationStatus.PENDING
 
 
+def regenerate_audio(choice):
+    """Regenerate the audio for a choice using the voice generation model."""
+    try:
+        console.print(f"[yellow]Regenerating audio for: {strip_formatting(choice.choice)}[/]")
+        
+        # Ensure we have clean text to generate
+        if not choice.clean:
+            console.print("[red]Error: No clean text available for this choice[/]")
+            return False
+            
+        # Create a backup of the original file
+        if choice.output.exists():
+            backup_path = choice.output.with_suffix(".flac.bak")
+            if not backup_path.exists():  # Only backup if not already backed up
+                choice.output.rename(backup_path)
+                console.print(f"[dim]Original audio backed up to: {backup_path}[/]")
+        
+        # Generate new audio using the existing function
+        console.print("[cyan]Generating new audio...[/]")
+        generate_choice_audio(choice, force=True)
+        
+        console.print("[green]Audio regenerated successfully![/]")
+        return True
+        
+    except Exception as e:
+        console.print(f"[red]Error regenerating audio: {e}[/]")
+        return False
+
+
+def handle_command(cmd, db, filename, choice, context=None):
+    """
+    Handle a command from user input using pattern matching.
+    Returns True if the command loop should continue, False if it should break.
+    """
+    match cmd:
+        case "a":
+            save_annotation(db, filename, AnnotationStatus.APPROVE)
+            console.print("[green]Marked as APPROVED[/]")
+            return False
+        case "r":
+            save_annotation(db, filename, AnnotationStatus.REJECT)
+            console.print("[red]Marked as REJECTED[/]")
+            return False
+        case "s":
+            notes = input("Enter notes for special case: ")
+            save_annotation(db, filename, AnnotationStatus.SPECIAL, notes)
+            console.print("[yellow]Marked as SPECIAL CASE[/]")
+            return False
+        case "p":
+            console.print("\n[cyan]Playing choice audio...[/]")
+            play_audio(choice.output)
+            return True
+        case "1" | "2" | "3":
+            play_count = int(cmd)
+            console.print(f"\n[cyan]Playing with {play_count} previous line(s)...[/]")
+            play_context_and_choice(choice, play_count)
+            return True
+        case "g":
+            # Regenerate in place, staying in the same menu
+            if regenerate_audio(choice):
+                console.print("\n[cyan]Playing regenerated audio...[/]")
+                play_audio(choice.output)
+                save_annotation(db, filename, AnnotationStatus.PENDING)
+                console.print("[green]Regenerated audio marked as PENDING for review.[/]")
+            return True
+        case "n":
+            console.print("[dim]Moving to next choice...[/]")
+            return False
+        case "q":
+            console.print("[yellow]Quitting annotation...[/]")
+            raise typer.Exit()
+        case _:
+            console.print("[red]Invalid action.[/]")
+            return True
+
+
+def run_command_loop(db, filename, choice):
+    """
+    Run a command loop for user interaction.
+    Returns True if the loop completed normally, False if it should exit early.
+    """
+    # Setup menu display
+    current_status = get_annotation_status(db, filename)
+    default_choice = "a" if current_status == AnnotationStatus.PENDING else "n"
+
+    console.print("\n[bold]Available actions:[/]")
+    console.print("[cyan]a[/]: approve  [cyan]r[/]: reject  [cyan]s[/]: special case")
+    console.print("[cyan]p[/]: play choice  [cyan]1-3[/]: play with 1-3 previous lines")
+    console.print("[cyan]g[/]: regenerate audio  [cyan]n[/]: next  [cyan]q[/]: quit")
+    console.print(f"[dim]Default: {default_choice}[/]")
+    
+    while True:
+        try:
+            current_status = get_annotation_status(db, filename)
+            default_choice = "a" if current_status == AnnotationStatus.PENDING else "n"
+            action = input("\nChoose action: ").strip().lower() or default_choice
+            
+            # Process the command
+            should_continue = handle_command(action, db, filename, choice)
+            if not should_continue:
+                return True
+        except KeyboardInterrupt:
+            console.print("[yellow]\nQuitting annotation...[/]")
+            raise typer.Exit()
+        except Exception as e:
+            console.print(f"[red]Error processing input: {e}[/]")
+    
+    return True
+
+
 @app.command()
 def annotate(
     start_index: int = typer.Option(0, "--start", "-s", help="Starting index for annotation"),
@@ -302,62 +416,9 @@ def annotate(
         # Play choice audio
         console.print("\n[cyan]Playing choice audio...[/]")
         play_audio(choice.output)
-
-        # Menu for actions
-        console.print("\n[bold]Available actions:[/]")
-        console.print("[cyan]a[/]: approve  [cyan]r[/]: reject  [cyan]s[/]: special case")
-        console.print("[cyan]p[/]: play choice  [cyan]p1-p3[/]: play with 1-3 previous lines")
-        console.print("[cyan]n[/]: next  [cyan]q[/]: quit")
-
-        # Default choice based on current status
-        default_choice = "a" if current_status == AnnotationStatus.PENDING else "n"
-        console.print(f"[dim]Default: {default_choice}[/]")
-
-        while True:
-            try:
-                action = input("\nChoose action: ").strip().lower() or default_choice
-
-                if action in ["a", "r", "s", "p", "1", "2", "3", "n", "q"]:
-                    if action == "a":
-                        save_annotation(db, filename, AnnotationStatus.APPROVE)
-                        console.print("[green]Marked as APPROVED[/]")
-                        break
-                    elif action == "r":
-                        save_annotation(db, filename, AnnotationStatus.REJECT)
-                        console.print("[red]Marked as REJECTED[/]")
-                        break
-                    elif action == "s":
-                        notes = input("Enter notes for special case: ")
-                        save_annotation(db, filename, AnnotationStatus.SPECIAL, notes)
-                        console.print("[yellow]Marked as SPECIAL CASE[/]")
-                        break
-                    elif action == "p":
-                        console.print("\n[cyan]Playing choice audio...[/]")
-                        play_audio(choice.output)
-                    elif action == "1":
-                        console.print("\n[cyan]Playing with 1 previous line...[/]")
-                        play_context_and_choice(choice, 1)
-                    elif action == "2":
-                        console.print("\n[cyan]Playing with 2 previous lines...[/]")
-                        play_context_and_choice(choice, 2)
-                    elif action == "3":
-                        console.print("\n[cyan]Playing with 3 previous lines...[/]")
-                        play_context_and_choice(choice, 3)
-                    elif action == "n":
-                        console.print("[dim]Skipping to next choice...[/]")
-                        break
-                    elif action == "q":
-                        console.print("[yellow]Quitting annotation...[/]")
-                        return
-                else:
-                    console.print(
-                        "[red]Invalid action. Please choose one of: a, r, s, p, 1, 2, 3, n, q[/]"
-                    )
-            except KeyboardInterrupt:
-                console.print("[yellow]\nQuitting annotation...[/]")
-                return
-            except Exception as e:
-                console.print(f"[red]Error processing input: {e}[/]")
+        
+        # Run the main command loop for this choice
+        run_command_loop(db, filename, choice)
 
     # Final progress report
     console.print("\n[bold green]Annotation session completed![/]")
