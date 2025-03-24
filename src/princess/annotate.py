@@ -192,9 +192,6 @@ def play_context_and_choice(choice, previous_count=1):
             return
             
         console.print(f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice...[/]")
-        
-        # Play a beep to indicate start
-        play_beep(880, 0.3)
         time.sleep(0.5)  # Short pause
         
         game_path = get_game_path()
@@ -208,23 +205,18 @@ def play_context_and_choice(choice, previous_count=1):
                 console.print(f"[dim]{text}[/]")
                 
                 # Use the existing voice file if available
-                voice_path = None
                 if dialogue.voice:
                     voice_path = game_path / dialogue.voice
                     play_audio(voice_path)
                 else:
                     console.print("[yellow]No voice file for this dialogue[/]")
-                    play_beep(440, 1.0)  # Play tone as placeholder
             else:
                 # It's a Choice object
                 text = f"Choice: {strip_formatting(dialogue.choice)}"
                 console.print(f"[dim]{text}[/]")
-                play_beep(660, 0.8)  # Different tone for choices
                 
             time.sleep(0.5)  # Short pause between dialogues
             
-        # Play a separator beep before the choice
-        play_beep(880, 0.3)
         time.sleep(0.5)  # Short pause
         
         # Play the choice audio
@@ -233,15 +225,6 @@ def play_context_and_choice(choice, previous_count=1):
         
     except Exception as e:
         console.print(f"[red]Error playing context audio: {e}[/]")
-
-
-def play_beep(frequency=440, duration=0.3):
-    """Play a simple beep tone."""
-    sample_rate = 24000
-    t = np.linspace(0, duration, int(duration * sample_rate), False)
-    tone = 0.3 * np.sin(2 * np.pi * frequency * t)
-    sounddevice.play(tone, sample_rate)
-    sounddevice.wait()
 
 
 def save_annotation(db, filename, status, notes=None):
@@ -324,7 +307,8 @@ def annotate(
         # Menu for actions
         console.print("\n[bold]Available actions:[/]")
         console.print("[cyan]a[/]: approve  [cyan]r[/]: reject  [cyan]s[/]: special case")
-        console.print("[cyan]p1-p3[/]: play with 1-3 previous lines  [cyan]n[/]: next  [cyan]q[/]: quit")
+        console.print("[cyan]p[/]: play choice  [cyan]p1-p3[/]: play with 1-3 previous lines")
+        console.print("[cyan]n[/]: next  [cyan]q[/]: quit")
         
         # Default choice based on current status
         default_choice = "a" if current_status == AnnotationStatus.PENDING else "n"
@@ -334,7 +318,7 @@ def annotate(
             try:
                 action = input("\nChoose action: ").strip().lower() or default_choice
                 
-                if action in ["a", "r", "s", "p1", "p2", "p3", "n", "q"]:
+                if action in ["a", "r", "s", "p", "p1", "p2", "p3", "n", "q"]:
                     if action == "a":
                         save_annotation(db, filename, AnnotationStatus.APPROVE)
                         console.print("[green]Marked as APPROVED[/]")
@@ -348,6 +332,9 @@ def annotate(
                         save_annotation(db, filename, AnnotationStatus.SPECIAL, notes)
                         console.print("[yellow]Marked as SPECIAL CASE[/]")
                         break
+                    elif action == "p":
+                        console.print("\n[cyan]Playing choice audio...[/]")
+                        play_audio(choice.output)
                     elif action == "p1":
                         console.print("\n[cyan]Playing with 1 previous line...[/]")
                         play_context_and_choice(choice, 1)
@@ -364,7 +351,7 @@ def annotate(
                         console.print("[yellow]Quitting annotation...[/]")
                         return
                 else:
-                    console.print("[red]Invalid action. Please choose one of: a, r, s, p1, p2, p3, n, q[/]")
+                    console.print("[red]Invalid action. Please choose one of: a, r, s, p, p1, p2, p3, n, q[/]")
             except KeyboardInterrupt:
                 console.print("[yellow]\nQuitting annotation...[/]")
                 return
