@@ -26,7 +26,6 @@ def run_pipeline():
                 choices.choices.append(choice)
 
     rich.print(f"extracted {len(choices.choices)} spoken choices")
-    Path("output/choices.json").write_text(choices.model_dump_json(indent=2))
     Path("output/choices.pickle").write_bytes(pickle.dumps(choices))
 
     # check existing audio files
