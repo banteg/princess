@@ -1,10 +1,10 @@
 import re
-from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
 import rich
 import typer
+from pydantic import BaseModel
 
 from princess.game import walk_script_files
 
@@ -14,8 +14,7 @@ app = typer.Typer()
 CHARACTER_RE = re.compile(r'^define (?P<id>.*?) = Character\(_?\(?"(?P<name>[^"]*)"\)?')
 
 
-@dataclass
-class Character:
+class Character(BaseModel):
     id: str
     name: str
 

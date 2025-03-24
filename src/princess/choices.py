@@ -4,7 +4,6 @@ We extract choices and their surrounding dialogue by traversing the Script tree.
 The resulting list can be used for text-to-speech generation.
 """
 
-from dataclasses import dataclass, asdict
 from pathlib import Path
 import json
 import rich

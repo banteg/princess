@@ -23,6 +23,7 @@ CHOICES = [
         condition="condition_1 == False",
         previous_dialogues=[DIALOGUE[0], DIALOGUE[1]],
         subsequent_dialogues=[],
+        path="tests/data/micro_script.rpy",
     ),
     ChoiceResult(
         line=9,
@@ -31,6 +32,7 @@ CHOICES = [
         condition="condition_2 == False",
         previous_dialogues=[DIALOGUE[0], DIALOGUE[1]],
         subsequent_dialogues=[DIALOGUE[2]],
+        path="tests/data/micro_script.rpy",
     ),
     ChoiceResult(
         line=12,
@@ -39,6 +41,7 @@ CHOICES = [
         condition="condition_3 == False",
         previous_dialogues=[DIALOGUE[0], DIALOGUE[1]],
         subsequent_dialogues=[DIALOGUE[3]],
+        path="tests/data/micro_script.rpy",
     ),
     ChoiceResult(
         line=17,
@@ -47,6 +50,7 @@ CHOICES = [
         condition="can_proceed",
         previous_dialogues=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
         subsequent_dialogues=[DIALOGUE[4]],
+        path="tests/data/micro_script.rpy",
     ),
     ChoiceResult(
         line=20,
@@ -55,6 +59,7 @@ CHOICES = [
         condition=None,
         previous_dialogues=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
         subsequent_dialogues=[DIALOGUE[5]],
+        path="tests/data/micro_script.rpy",
     ),
     ChoiceResult(
         line=23,
@@ -63,6 +68,7 @@ CHOICES = [
         condition=None,
         previous_dialogues=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
         subsequent_dialogues=[],
+        path="tests/data/micro_script.rpy",
     ),
 ]
 
@@ -70,7 +76,7 @@ CHOICES = [
 def test_parse_full_match():
     script_path = Path("tests/data/micro_script.rpy")
     ast_tree = parse_script(script_path)
-    parsed = extract_choices(ast_tree)
+    parsed = extract_choices(ast_tree, script_path)
 
     # Check that each parsed result matches the expected format/structure
     for i, result in enumerate(parsed):

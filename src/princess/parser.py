@@ -6,12 +6,12 @@ RenPy script parsing pipeline. We don't use any grammar and instead work our way
 
 import itertools
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 import rich
 import typer
 from lark import Discard, Token, Transformer, Tree
+from pydantic import BaseModel
 
 from princess.constants import CHARACTERS
 
@@ -33,8 +33,7 @@ choice_re = re.compile(r'^\s*"(?P<choice>[^"]+)"(?:\s*if (?P<condition>.+))?\s*:
 condition_re = re.compile(r"^\s*(?P<kind>if|elif|else)\s*(?P<condition>.*):$")
 
 
-@dataclass
-class Meta:
+class Meta(BaseModel):
     line: int
     indent: int
 
@@ -107,50 +106,42 @@ Remove lines that weren't assigned a token, empty blocks. Merge voice and dialog
 """
 
 
-@dataclass
-class Line:
+class Line(BaseModel):
     line: int
 
 
-@dataclass
 class Dialogue(Line):
     character: str
     dialogue: str
     voice: str | None = None
 
 
-@dataclass
 class Choice(Line):
     choice: str
-    condition: str
     children: list
+    condition: str | None = None
 
 
-@dataclass
 class Label(Line):
     label: str
     children: list
 
 
-@dataclass
 class Menu(Line):
     children: list
 
 
-@dataclass
 class Jump(Line):
     dest: str
 
 
-@dataclass
 class Condition(Line):
     kind: str
     condition: str
     children: list
 
 
-@dataclass
-class Script:
+class Script(BaseModel):
     children: list
 
 
