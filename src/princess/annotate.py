@@ -322,45 +322,54 @@ def annotate(
         play_audio(choice.output)
         
         # Menu for actions
+        console.print("\n[bold]Available actions:[/]")
+        console.print("[cyan]a[/]: approve  [cyan]r[/]: reject  [cyan]s[/]: special case")
+        console.print("[cyan]p1-p3[/]: play with 1-3 previous lines  [cyan]n[/]: next  [cyan]q[/]: quit")
+        
+        # Default choice based on current status
+        default_choice = "a" if current_status == AnnotationStatus.PENDING else "n"
+        console.print(f"[dim]Default: {default_choice}[/]")
+        
         while True:
-            action = typer.prompt(
-                "\nChoose action",
-                type=typer.Choice(["a", "r", "s", "p1", "p2", "p3", "n", "q"]),
-                help=(
-                    "a: approve, r: reject, s: special case, "
-                    "p1-3: play with 1-3 previous lines, n: next, q: quit"
-                ),
-                default="a" if current_status == AnnotationStatus.PENDING else "n"
-            )
-            
-            if action == "a":
-                save_annotation(db, filename, AnnotationStatus.APPROVE)
-                console.print("[green]Marked as APPROVED[/]")
-                break
-            elif action == "r":
-                save_annotation(db, filename, AnnotationStatus.REJECT)
-                console.print("[red]Marked as REJECTED[/]")
-                break
-            elif action == "s":
-                notes = typer.prompt("Enter notes for special case")
-                save_annotation(db, filename, AnnotationStatus.SPECIAL, notes)
-                console.print("[yellow]Marked as SPECIAL CASE[/]")
-                break
-            elif action == "p1":
-                console.print("\n[cyan]Playing with 1 previous line...[/]")
-                play_context_and_choice(choice, 1)
-            elif action == "p2":
-                console.print("\n[cyan]Playing with 2 previous lines...[/]")
-                play_context_and_choice(choice, 2)
-            elif action == "p3":
-                console.print("\n[cyan]Playing with 3 previous lines...[/]")
-                play_context_and_choice(choice, 3)
-            elif action == "n":
-                console.print("[dim]Skipping to next choice...[/]")
-                break
-            elif action == "q":
-                console.print("[yellow]Quitting annotation...[/]")
+            try:
+                action = input("\nChoose action: ").strip().lower() or default_choice
+                
+                if action in ["a", "r", "s", "p1", "p2", "p3", "n", "q"]:
+                    if action == "a":
+                        save_annotation(db, filename, AnnotationStatus.APPROVE)
+                        console.print("[green]Marked as APPROVED[/]")
+                        break
+                    elif action == "r":
+                        save_annotation(db, filename, AnnotationStatus.REJECT)
+                        console.print("[red]Marked as REJECTED[/]")
+                        break
+                    elif action == "s":
+                        notes = input("Enter notes for special case: ")
+                        save_annotation(db, filename, AnnotationStatus.SPECIAL, notes)
+                        console.print("[yellow]Marked as SPECIAL CASE[/]")
+                        break
+                    elif action == "p1":
+                        console.print("\n[cyan]Playing with 1 previous line...[/]")
+                        play_context_and_choice(choice, 1)
+                    elif action == "p2":
+                        console.print("\n[cyan]Playing with 2 previous lines...[/]")
+                        play_context_and_choice(choice, 2)
+                    elif action == "p3":
+                        console.print("\n[cyan]Playing with 3 previous lines...[/]")
+                        play_context_and_choice(choice, 3)
+                    elif action == "n":
+                        console.print("[dim]Skipping to next choice...[/]")
+                        break
+                    elif action == "q":
+                        console.print("[yellow]Quitting annotation...[/]")
+                        return
+                else:
+                    console.print("[red]Invalid action. Please choose one of: a, r, s, p1, p2, p3, n, q[/]")
+            except KeyboardInterrupt:
+                console.print("[yellow]\nQuitting annotation...[/]")
                 return
+            except Exception as e:
+                console.print(f"[red]Error processing input: {e}[/]")
     
     # Final progress report
     console.print("\n[bold green]Annotation session completed![/]")
