@@ -1,12 +1,14 @@
+import pickle
+from pathlib import Path
+
 import rich
 import typer
+from rich.progress import track
 
 from princess.choices import ChoiceResultList, extract_choices
 from princess.game import walk_script_files
 from princess.parser import parse_script
 from princess.voice import generate_choice_audio
-from pathlib import Path
-import pickle
 
 app = typer.Typer()
 
@@ -36,8 +38,8 @@ def run_pipeline():
     missing_files = expected_files - existing_files
 
     rich.print(f"[green]found {len(existing_files)} existing files")
-    rich.print(f"[red]found {len(unexpected_files)} unexpected files")
     rich.print(f"[yellow]found {len(missing_files)} missing files")
+    rich.print(f"[red]found {len(unexpected_files)} unexpected files")
 
     for file in unexpected_files:
         rich.print(f"[red]{file}")
@@ -46,12 +48,9 @@ def run_pipeline():
             file.unlink()
 
     missing_choices = {choice.output: choice for choice in choices.choices}
-    for file in missing_files:
-        rich.print(f"[yellow]{file}")
-        rich.print(missing_choices[file].clean)
 
     if missing_choices and typer.confirm("generate missing files?"):
-        for choice in missing_choices.values():
+        for choice in track(missing_choices.values()):
             generate_choice_audio(choice)
 
 

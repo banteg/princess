@@ -9,38 +9,28 @@ from pathlib import Path
 
 import rich
 import typer
-from pydantic import BaseModel
 from rich.progress import track
 
 from princess.game import get_game_path, walk_script_files
-from princess.parser import Choice, Condition, Dialogue, Jump, Label, Menu, Script, parse_script
+from princess.models import (
+    Choice,
+    ChoiceResult,
+    ChoiceResultList,
+    Condition,
+    Dialogue,
+    Jump,
+    Label,
+    Menu,
+    Script,
+)
+from princess.parser import parse_script
 from princess.text import clean_choice_for_voice
 
 app = typer.Typer()
 
 
-class ChoiceResult(BaseModel):
-    choice: str
-    condition: str | None
-    label: str | None
-    previous_dialogues: list[Dialogue | Choice]
-    subsequent_dialogues: list[Dialogue]
-    path: str | None = None
-    line: int | None = None
-    output: Path | None = None
-    clean: str | None = None
-
-    @property
-    def hash(self) -> str:
-        return sha256(self.choice.encode()).hexdigest()
-
-    def model_post_init(self, __context):
-        self.output = self.output or Path("output/voice") / f"{self.hash}.flac"
-        self.clean = self.clean or clean_choice_for_voice(self.choice)
-
-
-class ChoiceResultList(BaseModel):
-    choices: list[ChoiceResult] = []
+def get_voice_output_path(choice: str) -> Path:
+    return Path("output/voice") / f"{sha256(choice.encode()).hexdigest()}.flac"
 
 
 def extract_choices(script: Script, script_path: str | None = None) -> list[ChoiceResult]:
@@ -77,6 +67,8 @@ def extract_choices(script: Script, script_path: str | None = None) -> list[Choi
                     subsequent_dialogues=subs,
                     path=str(script_path),
                     line=ln,
+                    clean=clean_choice_for_voice(choice_text),
+                    output=get_voice_output_path(choice_text),
                 )
                 results.append(cr)
 

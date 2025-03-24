@@ -11,9 +11,9 @@ from pathlib import Path
 import rich
 import typer
 from lark import Discard, Token, Transformer, Tree
-from pydantic import BaseModel
 
 from princess.constants import CHARACTERS
+from princess.models import Condition, Choice, Dialogue, Jump, Label, Menu, Script, Meta
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 
@@ -23,7 +23,7 @@ Construct a raw tree from indented structure for further processing.
 """
 
 label_re = re.compile(r"^\s*label (?P<label>\w+):$")
-menu_re = re.compile(r"^\s*menu\s*(?P<name>\w+)?:$")
+menu_re = re.compile(r"^\s*menu\s*(?P<n>\w+)?:$")
 jump_re = re.compile(r"^\s*jump (?P<dest>\w+)$")
 voice_re = re.compile(r"^\s*voice \"(?P<voice>[^\"]+)\"$")
 dialogue_re = re.compile(
@@ -31,11 +31,6 @@ dialogue_re = re.compile(
 )
 choice_re = re.compile(r'^\s*"(?P<choice>[^"]+)"(?:\s*if (?P<condition>.+))?\s*:$')
 condition_re = re.compile(r"^\s*(?P<kind>if|elif|else)\s*(?P<condition>.*):$")
-
-
-class Meta(BaseModel):
-    line: int
-    indent: int
 
 
 def is_empty(line: str) -> bool:
@@ -104,45 +99,6 @@ def build_script_tree(script: str) -> Tree:
 Stage 2: Transform
 Remove lines that weren't assigned a token, empty blocks. Merge voice and dialogue lines. Parse choices and labels.
 """
-
-
-class Line(BaseModel):
-    line: int
-
-
-class Dialogue(Line):
-    character: str
-    dialogue: str
-    voice: str | None = None
-
-
-class Choice(Line):
-    choice: str
-    children: list = []
-    condition: str | None = None
-
-
-class Label(Line):
-    label: str
-    children: list
-
-
-class Menu(Line):
-    children: list
-
-
-class Jump(Line):
-    dest: str
-
-
-class Condition(Line):
-    kind: str
-    condition: str
-    children: list
-
-
-class Script(BaseModel):
-    children: list
 
 
 class RenpyTransformer(Transformer):

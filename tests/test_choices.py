@@ -1,7 +1,8 @@
 from pathlib import Path
 
-from princess.choices import ChoiceResult, extract_choices
+from princess.choices import ChoiceResult, extract_choices, get_voice_output_path
 from princess.parser import Choice, Dialogue, parse_script
+from princess.text import clean_choice_for_voice
 
 DIALOGUE = [
     Dialogue(line=3, character="n", dialogue="narrator_line_1", voice="narrator_audio_1"),
@@ -15,59 +16,76 @@ CHOSEN = [
     Choice(line=12, choice="• choice_3", condition="condition_3 == False", children=[]),
 ]
 
+
+def create_choice_result(line, label, choice, condition, previous, subsequent, path):
+    cleaned = clean_choice_for_voice(choice)
+    output_path = get_voice_output_path(choice)
+    return ChoiceResult(
+        line=line,
+        label=label,
+        choice=choice,
+        condition=condition,
+        previous_dialogues=previous,
+        subsequent_dialogues=subsequent,
+        path=path,
+        clean=cleaned,
+        output=output_path,
+    )
+
+
 CHOICES = [
-    ChoiceResult(
+    create_choice_result(
         line=8,
         label="main_dialogue",
         choice="• choice_1",
         condition="condition_1 == False",
-        previous_dialogues=[DIALOGUE[0], DIALOGUE[1]],
-        subsequent_dialogues=[],
+        previous=[DIALOGUE[0], DIALOGUE[1]],
+        subsequent=[],
         path="tests/data/micro_script.rpy",
     ),
-    ChoiceResult(
+    create_choice_result(
         line=9,
         label="main_dialogue",
         choice="• choice_2",
         condition="condition_2 == False",
-        previous_dialogues=[DIALOGUE[0], DIALOGUE[1]],
-        subsequent_dialogues=[DIALOGUE[2]],
+        previous=[DIALOGUE[0], DIALOGUE[1]],
+        subsequent=[DIALOGUE[2]],
         path="tests/data/micro_script.rpy",
     ),
-    ChoiceResult(
+    create_choice_result(
         line=12,
         label="main_dialogue",
         choice="• choice_3",
         condition="condition_3 == False",
-        previous_dialogues=[DIALOGUE[0], DIALOGUE[1]],
-        subsequent_dialogues=[DIALOGUE[3]],
+        previous=[DIALOGUE[0], DIALOGUE[1]],
+        subsequent=[DIALOGUE[3]],
         path="tests/data/micro_script.rpy",
     ),
-    ChoiceResult(
+    create_choice_result(
         line=17,
         label="nested_sequence",
         choice="• nested_choice_1",
         condition="can_proceed",
-        previous_dialogues=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
-        subsequent_dialogues=[DIALOGUE[4]],
+        previous=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
+        subsequent=[DIALOGUE[4]],
         path="tests/data/micro_script.rpy",
     ),
-    ChoiceResult(
+    create_choice_result(
         line=20,
         label="nested_sequence",
         choice="• nested_choice_2",
         condition=None,
-        previous_dialogues=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
-        subsequent_dialogues=[DIALOGUE[5]],
+        previous=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
+        subsequent=[DIALOGUE[5]],
         path="tests/data/micro_script.rpy",
     ),
-    ChoiceResult(
+    create_choice_result(
         line=23,
         label="nested_sequence",
         choice="• nested_choice_3",
         condition=None,
-        previous_dialogues=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
-        subsequent_dialogues=[],
+        previous=[DIALOGUE[0], DIALOGUE[1], CHOSEN[0], DIALOGUE[3]],
+        subsequent=[],
         path="tests/data/micro_script.rpy",
     ),
 ]

@@ -17,15 +17,12 @@ from huggingface_hub import hf_hub_download
 from mlx_lm.sample_utils import make_sampler
 from mutagen.flac import FLAC
 
-from princess.characters import extract_characters
 from princess.choices import ChoiceResult
 from princess.game import get_game_path
-from princess.parser import Choice, Dialogue
 from princess.text import print_choice_context, strip_formatting
 
 app = typer.Typer()
 target_sample_rate = 24_000
-
 
 
 @cache
@@ -91,20 +88,13 @@ def generate_line(text: str, output: Path = "output/sesame.flac", play: bool = F
         play_signal(signal)
 
 
-
-def print_dialogues(items: list[Dialogue | Choice]):
-    characters = extract_characters()
-    for item in items:
-        match item:
-            case Dialogue(character=character, dialogue=dialogue):
-                rich.print(f"[yellow]{characters[character]}[/]: [dim]{strip_formatting(dialogue)}")
-            case Choice(choice=choice):
-                rich.print(f"[red]Choice:[/] [dim]{strip_formatting(choice)}")
-
-
 def generate_choice_audio(choice: ChoiceResult, force: bool = False):
-    assert choice.output is not None, "choice output path is not set"
+    if choice.output is None:
+        rich.print("[yellow]No output path for this choice")
+        return
+
     if choice.clean is None:
+        rich.print("[yellow]No clean text for this choice")
         return
 
     if choice.output.exists() and not force:

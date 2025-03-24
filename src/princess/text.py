@@ -3,8 +3,7 @@ import re
 import rich
 
 from princess.characters import extract_characters
-from princess.choices import ChoiceResult
-from princess.parser import Choice, Dialogue
+from princess.models import Dialogue, Choice, ChoiceResult
 
 rewrites = {
     "N-no. I w-won't t-tell you.": "No, I won't tell you.",
@@ -55,22 +54,33 @@ def clean_choice_for_voice(choice: str) -> str | None:
 
 def print_dialogue(item: Dialogue | Choice, offset: int | None = None):
     characters = extract_characters()
-    offset_text = f"[blue]{offset:>2}[/] " if offset is not None else ""
-    
+    offset_text = f"[blue]{offset:+>2}[/] " if offset is not None else ""
+
     match item:
         case Dialogue(character=character, dialogue=dialogue):
-            rich.print(f"{offset_text}[yellow]{characters[character]}[/]: [dim]{strip_formatting(dialogue)}")
+            rich.print(
+                f"{offset_text}[yellow]{characters[character]}[/]: [dim]{strip_formatting(dialogue)}"
+            )
         case Choice(choice=choice):
-            rich.print(f"{offset_text}[red]Choice:[/] [dim]{strip_formatting(choice)}")
+            rich.print(f"{offset_text}[red]Choice:[/] {strip_formatting(choice)}")
+
+
+def print_dialogues(items: list[Dialogue | Choice]):
+    for item in items:
+        print_dialogue(item)
 
 
 def print_choice_context(choice: ChoiceResult):
+    # Print dialogues before the choice with negative numbers
     for i, dialogue in enumerate(choice.previous_dialogues[-3:]):
+        # Calculate relative position (-3, -2, or -1)
         offset = i - len(choice.previous_dialogues[-3:])
         print_dialogue(dialogue, offset)
-    
-    rich.print(f"[blue] 0[/] [magenta]Choice:[/] {strip_formatting(choice.choice)}")
-    rich.print(f"[magenta]Voiced: [bold blue]{choice.clean}")
-    
+
+    # Print the main choice at position 0
+    rich.print(f"[blue] 0[/] [bold magenta]Voiced: [bold blue]{choice.clean}")
+    rich.print(f"[blue] 0[/] [bold magenta]Choice:[/] [dim]{strip_formatting(choice.choice)}")
+
+    # Print dialogues after the choice with positive numbers
     for i, dialogue in enumerate(choice.subsequent_dialogues[:3], 1):
         print_dialogue(dialogue, i)
