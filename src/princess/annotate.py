@@ -147,10 +147,10 @@ def display_annotation_progress(db):
     table.add_column("Count", style="magenta")
     table.add_column("Percentage", style="green")
     
-    table.add_row("Approved", str(approved), f"{approved/total*100:.1f}%" if total else "0%")
-    table.add_row("Rejected", str(rejected), f"{rejected/total*100:.1f}%" if total else "0%")
-    table.add_row("Special", str(special), f"{special/total*100:.1f}%" if total else "0%")
-    table.add_row("Pending", str(pending), f"{pending/total*100:.1f}%" if total else "0%")
+    table.add_row("Approved", str(approved), f"{approved/total*100:.2f}%" if total else "0%")
+    table.add_row("Rejected", str(rejected), f"{rejected/total*100:.2f}%" if total else "0%")
+    table.add_row("Special", str(special), f"{special/total*100:.2f}%" if total else "0%")
+    table.add_row("Pending", str(pending), f"{pending/total*100:.2f}%" if total else "0%")
     table.add_row("Total", str(total), "100%")
     
     console.print(table)
