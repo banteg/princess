@@ -69,7 +69,7 @@ def extract_choices(script: Script, script_path: str | None = None) -> list[Choi
                 results.append(cr)
 
                 # Step C: For nested blocks, we append the current choice to the path
-                chosen = Choice(line=ln, choice=choice_text, condition=cond, children=[])
+                chosen = Choice(line=ln, choice=choice_text, condition=cond)
                 new_path = path[:] + [chosen]
 
                 # Now walk deeper (unless next is a junction)
@@ -102,23 +102,21 @@ def extract_choices_from_script(path: Path):
     choices = extract_choices(script, script_path=relative_path)
     rich.print(choices)
     rich.print(f"Extracted {len(choices)} choices")
-
-    text = json.dumps([c.model_dump() for c in choices], indent=2)
-    Path("output/choices.json").write_text(text)
+    Path("output/choices.json").write_text(ChoiceResultList(choices=choices).model_dump_json(indent=2))
     return choices
 
 
 @app.command("all-choices")
 def extract_all_choices():
-    extracted = []
+    extracted = ChoiceResultList(choices=[])
     game_scripts = list(walk_script_files())
     for path in track(game_scripts):
         script = parse_script(path)
         choices = extract_choices(script, script_path=path)
         rich.print(f"{path}: Extracted {len(choices)} choices")
-        extracted.extend(choices)
+        extracted.choices.extend(choices)
 
-    rich.print(f"Extracted {len(extracted)} choices from {len(game_scripts)} scripts")
+    rich.print(f"Extracted {len(extracted.choices)} choices from {len(game_scripts)} scripts")
     return extracted
 
 

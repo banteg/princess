@@ -118,7 +118,7 @@ class Dialogue(Line):
 
 class Choice(Line):
     choice: str
-    children: list
+    children: list = []
     condition: str | None = None
 
 
