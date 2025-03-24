@@ -88,7 +88,7 @@ def generate_line(text: str, output: Path = "output/sesame.flac", play: bool = F
         play_signal(signal)
 
 
-def generate_choice_audio(choice: ChoiceResult, force: bool = False):
+def generate_choice_audio(choice: ChoiceResult, force: bool = False, verbose: bool = False):
     if choice.output is None:
         rich.print("[yellow]No output path for this choice")
         return
@@ -101,8 +101,9 @@ def generate_choice_audio(choice: ChoiceResult, force: bool = False):
         rich.print(f"[yellow]file exists: {strip_formatting(choice.choice)}")
         return
 
-    rich.print("[green]generating...[/]")
-    print_choice_context(choice)
+    if verbose:
+        rich.print("[green]generating...[/]")
+        print_choice_context(choice)
 
     sesame(choice.clean, load_hero_context(), choice.output)
     rich.print(f"[green]saved {choice.output}\n")

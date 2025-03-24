@@ -50,7 +50,7 @@ def run_pipeline():
 
     if missing_choices and typer.confirm("generate missing files?"):
         for choice in track(missing_choices.values()):
-            generate_choice_audio(choice)
+            generate_choice_audio(choice, verbose=True)
 
 
 if __name__ == "__main__":
