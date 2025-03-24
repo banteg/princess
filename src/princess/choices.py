@@ -4,29 +4,31 @@ We extract choices and their surrounding dialogue by traversing the Script tree.
 The resulting list can be used for text-to-speech generation.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
-
+import json
 import rich
 import typer
+from rich.progress import track
 
-from princess.game import walk_script_files
+from princess.game import walk_script_files, get_game_path
 from princess.parser import Choice, Condition, Dialogue, Jump, Label, Menu, Script, parse_script
+from pydantic import BaseModel
 
 app = typer.Typer()
 
 
-@dataclass
-class ChoiceResult:
-    line: int
+class ChoiceResult(BaseModel):
     choice: str
     condition: str | None
     label: str | None
     previous_dialogues: list[Dialogue | Choice]
     subsequent_dialogues: list[Dialogue]
+    path: str | None = None
+    line: int | None = None
 
 
-def extract_choices(script: Script) -> list[ChoiceResult]:
+def extract_choices(script: Script, script_path: str | None = None) -> list[ChoiceResult]:
     results: list[ChoiceResult] = []
 
     def walk(node, path: list[Dialogue | Choice], current_label: str | None):
@@ -53,12 +55,13 @@ def extract_choices(script: Script) -> list[ChoiceResult]:
 
                 # Step B: build a ChoiceResult
                 cr = ChoiceResult(
-                    line=ln,
                     choice=choice_text,
                     condition=cond,
                     label=current_label,
                     previous_dialogues=path[:],
                     subsequent_dialogues=subs,
+                    path=str(script_path),
+                    line=ln,
                 )
                 results.append(cr)
 
@@ -91,23 +94,28 @@ def collect_dialogues_until_junction(children: list) -> list[Dialogue]:
 @app.command("choices")
 def extract_choices_from_script(path: Path):
     script = parse_script(path)
-    choices = extract_choices(script)
+    game_path = get_game_path()
+    relative_path = path.relative_to(game_path) if path.is_relative_to(game_path) else path
+    choices = extract_choices(script, script_path=relative_path)
     rich.print(choices)
     rich.print(f"Extracted {len(choices)} choices")
+
+    text = json.dumps([c.model_dump() for c in choices], indent=2)
+    Path("output/choices.json").write_text(text)
     return choices
 
 
 @app.command("all-choices")
 def extract_all_choices():
     extracted = []
-    for path in walk_script_files():
+    game_scripts = list(walk_script_files())
+    for path in track(game_scripts):
         script = parse_script(path)
-        choices = extract_choices(script)
-        rich.print(choices)
-        rich.print(f"Extracted {len(choices)} choices")
+        choices = extract_choices(script, script_path=path)
+        rich.print(f"{path}: Extracted {len(choices)} choices")
         extracted.extend(choices)
 
-    rich.print(f"Extracted {len(extracted)} choices")
+    rich.print(f"Extracted {len(extracted)} choices from {len(game_scripts)} scripts")
     return extracted
 
 
