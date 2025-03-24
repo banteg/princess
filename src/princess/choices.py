@@ -6,6 +6,7 @@ The resulting list can be used for text-to-speech generation.
 
 from hashlib import sha256
 from pathlib import Path
+from typing import Iterator
 
 import rich
 import typer
@@ -84,7 +85,7 @@ def extract_choices(script: Script, script_path: str | None = None) -> list[Choi
     return results
 
 
-def collect_dialogues_until_junction(children: list) -> list[Dialogue]:
+def collect_dialogues_until_junction(children: list) -> Iterator[Dialogue]:
     for child in children:
         # 1) If child is a junction (Menu, Condition, Jump, etc.), STOP
         match child:
