@@ -57,7 +57,7 @@ def load_hero_context():
 
 def sesame(text: str, context: list[Segment], output: Path, max_length: float = 10.0):
     model = load_model()
-    sampler = make_sampler(temp=0.8, top_k=50, min_p=0.05)
+    sampler = make_sampler(temp=0.9, top_k=50)
     signal = generate(
         model=model,
         text=text,
