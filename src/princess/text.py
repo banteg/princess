@@ -32,6 +32,7 @@ def clean_choice_for_voice(choice: str) -> str | None:
     prefixes_re = re.compile(r"\([^\)]+\)\s+")
     actions_re = re.compile(r"\[\[[^]]+\]")
     quoted_text_re = re.compile(r"''(.+?)''")
+    unwanted_re = re.compile(r"Ugh!")
     special_re = re.compile(
         r"^(Say|Join|Follow|Play|Return|Make|Continue|Ignore|Embrace|Investigate|Go|Do|Drop|Tighten|Kneel|Force|Try)\s"
     )
@@ -40,6 +41,7 @@ def clean_choice_for_voice(choice: str) -> str | None:
     choice = formatting_re.sub("", choice)
     choice = prefixes_re.sub("", choice)
     choice = actions_re.sub("", choice)
+    choice = unwanted_re.sub("", choice)
 
     # quoted text is 100% spoken dialogue
     if quoted_text := quoted_text_re.findall(choice):
