@@ -105,8 +105,9 @@ def generate_choice_audio(choice: ChoiceResult, force: bool = False, verbose: bo
         rich.print("[green]generating...[/]")
         print_choice_context(choice)
 
-    sesame(choice.clean, load_hero_context(), choice.output)
-    rich.print(f"[green]saved {choice.output}\n")
+    signal = sesame(choice.clean, load_hero_context(), choice.output)
+    duration = len(signal) / target_sample_rate
+    rich.print(f"[green]saved {duration:.2f}s audio to {choice.output}\n")
 
 
 if __name__ == "__main__":
