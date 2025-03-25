@@ -293,7 +293,7 @@ def handle_command(cmd, db, filename, choice, context=None):
             # Regenerate in place, staying in the same menu
             if regenerate_audio(choice):
                 console.print("\n[cyan]Playing regenerated audio...[/]")
-                play_audio(choice.output)
+                play_audio(choice.output, block=False)
                 save_annotation(db, filename, AnnotationStatus.PENDING)
                 console.print("[green]Regenerated audio marked as PENDING for review.[/]")
             return True
