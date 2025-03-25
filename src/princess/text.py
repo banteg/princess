@@ -33,7 +33,7 @@ def clean_choice_for_voice(choice: str) -> str | None:
     actions_re = re.compile(r"\[\[[^]]+\]")
     quoted_text_re = re.compile(r"''(.+?)''")
     unwanted_re = re.compile(r"Ugh!|\(|\)")
-    quotes_re = re.compile(r"(?<!\w)'|'(?!\w)")
+    quotes_re = re.compile(r"(?<!\w)'|'(?!\w)|^'|'$")
     special_re = re.compile(
         r"^(Say|Join|Follow|Play|Return|Make|Continue|Ignore|Embrace|Investigate|Go|Do|Drop|Tighten|Kneel|Force|Try)\s"
     )
