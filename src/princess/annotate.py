@@ -34,7 +34,6 @@ class AnnotationStatus(str, Enum):
     REJECT = "reject"
     SPECIAL = "special"
     PENDING = "pending"
-    REGENERATED = "regenerated"
 
 
 def setup_db():
@@ -151,7 +150,6 @@ def display_annotation_progress(db):
     rejected = status_counts.get(AnnotationStatus.REJECT, 0)
     special = status_counts.get(AnnotationStatus.SPECIAL, 0)
     pending = status_counts.get(AnnotationStatus.PENDING, 0)
-    regenerated = status_counts.get(AnnotationStatus.REGENERATED, 0)
 
     table = Table(title="Annotation Progress")
     table.add_column("Status", style="cyan")
@@ -187,7 +185,9 @@ def play_context_and_choice(choice, previous_count=1):
         play_audio(choice.output, block=False)
         return
 
-    console.print(f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice + next dialogue if available...[/]")
+    console.print(
+        f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice + next dialogue if available...[/]"
+    )
     game_path = get_game_path()
 
     # Play each dialogue sequentially
@@ -216,12 +216,12 @@ def play_context_and_choice(choice, previous_count=1):
     # Play the choice audio
     console.print(f"[cyan]Main choice: {strip_formatting(choice.choice)}[/]")
     play_audio(choice.output, block=True)
-    
+
     # Play the next dialogue if available
     if choice.subsequent_dialogues:
         time.sleep(0.1)  # Short pause
         next_dialogue = choice.subsequent_dialogues[0]
-        
+
         console.print(f"[dim cyan]Next dialogue:[/]")
         text = f"{next_dialogue.character}: {strip_formatting(next_dialogue.dialogue)}"
         console.print(f"[dim]{text}[/]")
@@ -232,6 +232,30 @@ def play_context_and_choice(choice, previous_count=1):
             play_audio(voice_path, block=True)
         else:
             console.print("[yellow]No voice file for this dialogue[/]")
+
+
+def play_choice_and_next(choice):
+    """Play the choice and the next dialogue if available."""
+    console.print(f"[cyan]Playing choice + next dialogue...[/]")
+    game_path = get_game_path()
+
+    # Play the choice audio
+    console.print(f"[cyan]Main choice: {strip_formatting(choice.choice)}[/]")
+    play_audio(choice.output)
+
+    # Play the next dialogue if available
+    if choice.subsequent_dialogues:
+        time.sleep(0.1)  # Short pause
+        next_dialogue = choice.subsequent_dialogues[0]
+
+        console.print(f"[dim cyan]Next dialogue:[/]")
+        text = f"{next_dialogue.character}: {strip_formatting(next_dialogue.dialogue)}"
+        console.print(f"[dim]{text}[/]")
+
+        # Use the existing voice file if available
+        if next_dialogue.voice:
+            voice_path = game_path / next_dialogue.voice
+            play_audio(voice_path)
 
 
 def save_annotation(db, filename, status, notes=None):
@@ -251,19 +275,16 @@ def regenerate_audio(choice):
     """Regenerate the audio for a choice using the voice generation model."""
     try:
         console.print(f"[yellow]Regenerating audio for: {strip_formatting(choice.choice)}[/]")
-        
+
         # Ensure we have clean text to generate
         if not choice.clean:
             console.print("[red]Error: No clean text available for this choice[/]")
             return False
-            
-        # Generate new audio using the existing function
-        console.print("[cyan]Generating new audio...[/]")
+
         generate_choice_audio(choice, force=True)
-        
-        console.print("[green]Audio regenerated successfully![/]")
+
         return True
-        
+
     except Exception as e:
         console.print(f"[red]Error regenerating audio: {e}[/]")
         return False
@@ -292,6 +313,10 @@ def handle_command(cmd, db, filename, choice, context=None):
             console.print("\n[cyan]Playing choice audio...[/]")
             play_audio(choice.output, block=False)
             return True
+        case "0":
+            console.print("\n[cyan]Playing choice + next dialogue...[/]")
+            play_choice_and_next(choice)
+            return True
         case "1" | "2" | "3":
             play_count = int(cmd)
             console.print(f"\n[cyan]Playing with {play_count} previous line(s)...[/]")
@@ -300,10 +325,8 @@ def handle_command(cmd, db, filename, choice, context=None):
         case "g":
             # Regenerate in place, staying in the same menu
             if regenerate_audio(choice):
-                console.print("\n[cyan]Playing regenerated audio...[/]")
                 play_audio(choice.output, block=False)
                 save_annotation(db, filename, AnnotationStatus.PENDING)
-                console.print("[green]Regenerated audio marked as PENDING for review.[/]")
             return True
         case "n":
             console.print("[dim]Moving to next choice...[/]")
@@ -323,17 +346,19 @@ def run_command_loop(db, filename, choice):
     """
     # Setup menu display
     current_status = get_annotation_status(db, filename)
-    
+
     console.print("\n[bold]Available actions:[/]")
     console.print("[cyan]a[/]: approve  [cyan]r[/]: reject  [cyan]s[/]: special case")
-    console.print("[cyan]p[/]: play choice  [cyan]1-3[/]: play with 1-3 previous lines")
+    console.print(
+        "[cyan]p[/]: play choice  [cyan]0[/]: play with next line  [cyan]1-3[/]: play with previous lines"
+    )
     console.print("[cyan]g[/]: regenerate audio  [cyan]n[/]: next  [cyan]q[/]: quit")
-    
+
     while True:
         try:
             current_status = get_annotation_status(db, filename)
             action = input("\nChoose action: ").strip().lower()
-            
+
             # Process the command
             should_continue = handle_command(action, db, filename, choice)
             if not should_continue:
@@ -343,7 +368,7 @@ def run_command_loop(db, filename, choice):
             raise typer.Exit()
         except Exception as e:
             console.print(f"[red]Error processing input: {e}[/]")
-    
+
     return True
 
 
@@ -414,7 +439,7 @@ def annotate(
         # Play choice audio
         console.print("\n[cyan]Playing choice audio...[/]")
         play_audio(choice.output, block=False)
-        
+
         # Run the main command loop for this choice
         run_command_loop(db, filename, choice)
 
