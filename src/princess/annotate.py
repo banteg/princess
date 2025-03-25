@@ -431,11 +431,6 @@ def handle_command(cmd, db, filename, choice, context=None):
                 save_annotation(db, filename, AnnotationStatus.PENDING)
                 console.print("[green]Regenerated audio marked as PENDING for review.[/]")
             return True
-        case "x":
-            # Stop playback
-            sound_player.stop()
-            console.print("[yellow]Playback stopped[/]")
-            return True
         case "n":
             console.print("[dim]Moving to next choice...[/]")
             return False
@@ -443,8 +438,7 @@ def handle_command(cmd, db, filename, choice, context=None):
             console.print("[yellow]Quitting annotation...[/]")
             sound_player.shutdown()
             raise typer.Exit()
-        case readchar.key.ESCAPE:
-            # Stop playback on ESC
+        case readchar.key.BACKSPACE:
             sound_player.stop()
             sound_player.clear()
             console.print("[yellow]Playback stopped[/]")
@@ -465,10 +459,10 @@ def run_command_loop(db, filename, choice):
     console.print("\n[bold]Available actions:[/]")
     console.print("[cyan]a[/]: approve  [cyan]r[/]: reject  [cyan]s[/]: special case")
     console.print(
-        "[cyan]p[/]: play choice  [cyan]0[/]: play with next line  [cyan]1-3[/]: play with previous lines"
+        "[cyan]p[/]: play choice  [cyan]0[/]: play with next line  [cyan]1-3[/]: play with n lines of context"
     )
-    console.print("[cyan]g[/]: regenerate audio  [cyan]x[/]: stop playback  [cyan]n[/]: next  [cyan]q[/]: quit")
-    console.print("[cyan]ESC[/]: stop playback")
+    console.print("[cyan]g[/]: regenerate audio  [cyan]n[/]: next  [cyan]q[/]: quit")
+    console.print("[cyan]backspace[/]: stop playback")
 
     while True:
         try:
@@ -560,6 +554,7 @@ def annotate(
 
             # Play choice audio
             console.print("\n[cyan]Playing choice audio...[/]")
+            sound_player.clear()
             play_audio(choice.output)
 
             # Run the main command loop for this choice
