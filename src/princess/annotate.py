@@ -188,7 +188,7 @@ def play_context_and_choice(choice, previous_count=1):
         play_audio(choice.output, block=False)
         return
 
-    console.print(f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice...[/]")
+    console.print(f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice + next dialogue if available...[/]")
     game_path = get_game_path()
 
     # Play each dialogue sequentially
@@ -216,7 +216,23 @@ def play_context_and_choice(choice, previous_count=1):
 
     # Play the choice audio
     console.print(f"[cyan]Main choice: {strip_formatting(choice.choice)}[/]")
-    play_audio(choice.output, block=False)
+    play_audio(choice.output, block=True)
+    
+    # Play the next dialogue if available
+    if choice.subsequent_dialogues:
+        time.sleep(0.1)  # Short pause
+        next_dialogue = choice.subsequent_dialogues[0]
+        
+        console.print(f"[dim cyan]Next dialogue:[/]")
+        text = f"{next_dialogue.character}: {strip_formatting(next_dialogue.dialogue)}"
+        console.print(f"[dim]{text}[/]")
+
+        # Use the existing voice file if available
+        if next_dialogue.voice:
+            voice_path = game_path / next_dialogue.voice
+            play_audio(voice_path, block=True)
+        else:
+            console.print("[yellow]No voice file for this dialogue[/]")
 
 
 def save_annotation(db, filename, status, notes=None):
