@@ -478,8 +478,6 @@ def run_command_loop(db, filename, choice):
             console.print("[yellow]\nQuitting annotation...[/]")
             sound_player.shutdown()
             raise typer.Exit()
-        except Exception as e:
-            console.print(f"[red]Error processing input: {e}[/]")
 
     return True
 
