@@ -329,7 +329,7 @@ def play_context_and_choice(choice, previous_count=1):
     sound_player.queue_multiple(playlist)
 
 
-def play_choice_and_next(choice):
+def play_choice_and_next(choice, play_count=1):
     """Play the choice and the next dialogue if available."""
     game_path = get_game_path()
 
@@ -344,15 +344,14 @@ def play_choice_and_next(choice):
     playlist.append(choice.output)
 
     # Add the next dialogue to playlist if available
-    if choice.subsequent_dialogues:
-        next_dialogue = choice.subsequent_dialogues[0]
+    for line in choice.subsequent_dialogues[:play_count]:
         console.print(f"[dim cyan]Next dialogue:[/]")
-        text = f"{next_dialogue.character}: {strip_formatting(next_dialogue.dialogue)}"
+        text = f"{line.character}: {strip_formatting(line.dialogue)}"
         console.print(f"[dim]{text}[/]")
 
         # Add to playlist if voice file is available
-        if next_dialogue.voice:
-            voice_path = game_path / next_dialogue.voice
+        if line.voice:
+            voice_path = game_path / line.voice
             playlist.append(voice_path)
         else:
             console.print("[yellow]No voice file for this dialogue[/]")
@@ -415,9 +414,10 @@ def handle_command(cmd, db, filename, choice, context=None):
             console.print("\n[cyan]Playing choice audio...[/]")
             play_audio(choice.output)
             return True
-        case "0":
+        case "0" | "9" | "8":
             console.print("\n[cyan]Playing choice + next dialogue...[/]")
-            play_choice_and_next(choice)
+            play_count = {"0": 1, "9": 2, "8": 3}[cmd]
+            play_choice_and_next(choice, play_count)
             return True
         case "1" | "2" | "3":
             play_count = int(cmd)
