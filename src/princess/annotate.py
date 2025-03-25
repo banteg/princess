@@ -161,7 +161,6 @@ def display_annotation_progress(db):
     table.add_row("Approved", str(approved), f"{approved / total * 100:.2f}%" if total else "0%")
     table.add_row("Rejected", str(rejected), f"{rejected / total * 100:.2f}%" if total else "0%")
     table.add_row("Special", str(special), f"{special / total * 100:.2f}%" if total else "0%")
-    table.add_row("Regenerated", str(regenerated), f"{regenerated / total * 100:.2f}%" if total else "0%")
     table.add_row("Pending", str(pending), f"{pending / total * 100:.2f}%" if total else "0%")
     table.add_row("Total", str(total), "100%")
 
@@ -324,19 +323,16 @@ def run_command_loop(db, filename, choice):
     """
     # Setup menu display
     current_status = get_annotation_status(db, filename)
-    default_choice = "a" if current_status == AnnotationStatus.PENDING else "n"
-
+    
     console.print("\n[bold]Available actions:[/]")
     console.print("[cyan]a[/]: approve  [cyan]r[/]: reject  [cyan]s[/]: special case")
     console.print("[cyan]p[/]: play choice  [cyan]1-3[/]: play with 1-3 previous lines")
     console.print("[cyan]g[/]: regenerate audio  [cyan]n[/]: next  [cyan]q[/]: quit")
-    console.print(f"[dim]Default: {default_choice}[/]")
     
     while True:
         try:
             current_status = get_annotation_status(db, filename)
-            default_choice = "a" if current_status == AnnotationStatus.PENDING else "n"
-            action = input("\nChoose action: ").strip().lower() or default_choice
+            action = input("\nChoose action: ").strip().lower()
             
             # Process the command
             should_continue = handle_command(action, db, filename, choice)
