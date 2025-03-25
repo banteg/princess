@@ -236,7 +236,6 @@ def play_context_and_choice(choice, previous_count=1):
 
 def play_choice_and_next(choice):
     """Play the choice and the next dialogue if available."""
-    console.print(f"[cyan]Playing choice + next dialogue...[/]")
     game_path = get_game_path()
 
     # Play the choice audio
@@ -314,7 +313,6 @@ def handle_command(cmd, db, filename, choice, context=None):
             play_audio(choice.output, block=False)
             return True
         case "0":
-            console.print("\n[cyan]Playing choice + next dialogue...[/]")
             play_choice_and_next(choice)
             return True
         case "1" | "2" | "3":
