@@ -16,6 +16,9 @@ from rich.console import Console
 from rich.table import Table
 from sqlite_utils import Database
 import pygame
+import threading
+import readchar
+import queue
 
 from princess.game import get_game_path
 from princess.models import Dialogue
@@ -27,6 +30,94 @@ console = Console()
 
 pygame.init()
 pygame.mixer.init()
+
+
+class SoundPlayer:
+    """
+    A non-blocking audio player that maintains a playlist and plays audio in a background thread.
+    """
+    def __init__(self):
+        self.playlist = queue.Queue()
+        self.current_file = None
+        self.is_playing = False
+        self.stop_requested = False
+        self.thread = None
+        
+    def start(self):
+        """Start the player thread if not already running."""
+        if self.thread is None or not self.thread.is_alive():
+            self.stop_requested = False
+            self.thread = threading.Thread(target=self._player_thread)
+            self.thread.daemon = True
+            self.thread.start()
+    
+    def _player_thread(self):
+        """Background thread that plays audio files from the playlist."""
+        while not self.stop_requested:
+            try:
+                # Get the next file from the playlist if one is available
+                try:
+                    self.current_file = self.playlist.get(block=False)
+                    self.is_playing = True
+                    
+                    # Play the file
+                    pygame.mixer.music.load(self.current_file)
+                    pygame.mixer.music.play()
+                    
+                    # Wait for playback to complete or stop request
+                    while pygame.mixer.music.get_busy() and not self.stop_requested:
+                        time.sleep(0.1)
+                    
+                    self.is_playing = False
+                    self.playlist.task_done()
+                    
+                except queue.Empty:
+                    # No files in playlist, sleep briefly and check again
+                    time.sleep(0.2)
+            
+            except Exception as e:
+                console.print(f"[red]Error in player thread: {e}[/]")
+                self.is_playing = False
+                time.sleep(0.5)  # Prevent busy-looping on error
+    
+    def queue(self, file_path):
+        """Add a file to the playlist."""
+        self.playlist.put(file_path)
+        self.start()  # Ensure the player thread is running
+    
+    def queue_multiple(self, file_paths):
+        """Add multiple files to the playlist."""
+        for path in file_paths:
+            self.playlist.put(path)
+        self.start()  # Ensure the player thread is running
+    
+    def clear(self):
+        """Clear the playlist and stop current playback."""
+        self.stop()
+        # Clear the queue
+        while not self.playlist.empty():
+            try:
+                self.playlist.get(block=False)
+                self.playlist.task_done()
+            except queue.Empty:
+                break
+    
+    def stop(self):
+        """Stop the current playback but keep the thread alive."""
+        if self.is_playing:
+            pygame.mixer.music.stop()
+            self.is_playing = False
+    
+    def shutdown(self):
+        """Stop playback and terminate the player thread."""
+        self.stop_requested = True
+        self.stop()
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=1.0)
+            
+
+# Create a global sound player instance
+sound_player = SoundPlayer()
 
 
 class AnnotationStatus(str, Enum):
@@ -165,32 +256,38 @@ def display_annotation_progress(db):
     console.print(table)
 
 
-def play_audio(audio_path, block=True):
-    # pygame is the only method that doesn't cut-off the audio at the end
-    pygame.mixer.music.load(audio_path)
-    pygame.mixer.music.play()
-    if block:
-        while pygame.mixer.music.get_busy():
-            continue
+def play_audio(audio_path, block=False):
+    """
+    Play audio using the global sound player.
+    This function never blocks, regardless of the block parameter (kept for compatibility).
+    """
+    sound_player.clear()  # Clear any current playlist
+    sound_player.queue(audio_path)
 
 
 def play_context_and_choice(choice, previous_count=1):
     """Play previous context and the choice back to back."""
     # Get the previous dialogues based on the requested count
     prev_dialogues = choice.previous_dialogues[-previous_count:] if previous_count > 0 else []
-
+    game_path = get_game_path()
+    
+    # Clear any current playlist
+    sound_player.clear()
+    
     if not prev_dialogues:
         # If no previous dialogues, just play the choice
         console.print("[yellow]No previous dialogues to play, playing choice only.[/]")
-        play_audio(choice.output, block=False)
+        sound_player.queue(choice.output)
         return
 
     console.print(
         f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice + next dialogue if available...[/]"
     )
-    game_path = get_game_path()
 
-    # Play each dialogue sequentially
+    # Prepare playlist of audio files
+    playlist = []
+    
+    # Add previous dialogues to playlist
     for i, dialogue in enumerate(prev_dialogues):
         console.print(f"[dim cyan]Previous dialogue {i + 1}/{len(prev_dialogues)}:[/]")
 
@@ -198,10 +295,10 @@ def play_context_and_choice(choice, previous_count=1):
             text = f"{dialogue.character}: {strip_formatting(dialogue.dialogue)}"
             console.print(f"[dim]{text}[/]")
 
-            # Use the existing voice file if available
+            # Add to playlist if voice file is available
             if dialogue.voice:
                 voice_path = game_path / dialogue.voice
-                play_audio(voice_path)
+                playlist.append(voice_path)
             else:
                 console.print("[yellow]No voice file for this dialogue[/]")
         else:
@@ -209,52 +306,58 @@ def play_context_and_choice(choice, previous_count=1):
             text = f"Choice: {strip_formatting(dialogue.choice)}"
             console.print(f"[dim]{text}[/]")
 
-        time.sleep(0.1)  # Short pause between dialogues
-
-    time.sleep(0.1)  # Short pause
-
-    # Play the choice audio
+    # Add the choice audio to playlist
     console.print(f"[cyan]Main choice: {strip_formatting(choice.choice)}[/]")
-    play_audio(choice.output, block=True)
+    playlist.append(choice.output)
 
-    # Play the next dialogue if available
+    # Add the next dialogue to playlist if available
     if choice.subsequent_dialogues:
-        time.sleep(0.1)  # Short pause
         next_dialogue = choice.subsequent_dialogues[0]
-
         console.print(f"[dim cyan]Next dialogue:[/]")
         text = f"{next_dialogue.character}: {strip_formatting(next_dialogue.dialogue)}"
         console.print(f"[dim]{text}[/]")
 
-        # Use the existing voice file if available
+        # Add to playlist if voice file is available
         if next_dialogue.voice:
             voice_path = game_path / next_dialogue.voice
-            play_audio(voice_path, block=True)
+            playlist.append(voice_path)
         else:
             console.print("[yellow]No voice file for this dialogue[/]")
+    
+    # Queue all files for playback
+    sound_player.queue_multiple(playlist)
 
 
 def play_choice_and_next(choice):
     """Play the choice and the next dialogue if available."""
     game_path = get_game_path()
-
-    # Play the choice audio
+    
+    # Clear any current playlist
+    sound_player.clear()
+    
+    # Prepare playlist
+    playlist = []
+    
+    # Add the choice audio to playlist
     console.print(f"[cyan]Main choice: {strip_formatting(choice.choice)}[/]")
-    play_audio(choice.output)
+    playlist.append(choice.output)
 
-    # Play the next dialogue if available
+    # Add the next dialogue to playlist if available
     if choice.subsequent_dialogues:
-        time.sleep(0.1)  # Short pause
         next_dialogue = choice.subsequent_dialogues[0]
-
         console.print(f"[dim cyan]Next dialogue:[/]")
         text = f"{next_dialogue.character}: {strip_formatting(next_dialogue.dialogue)}"
         console.print(f"[dim]{text}[/]")
 
-        # Use the existing voice file if available
+        # Add to playlist if voice file is available
         if next_dialogue.voice:
             voice_path = game_path / next_dialogue.voice
-            play_audio(voice_path)
+            playlist.append(voice_path)
+        else:
+            console.print("[yellow]No voice file for this dialogue[/]")
+    
+    # Queue all files for playback
+    sound_player.queue_multiple(playlist)
 
 
 def save_annotation(db, filename, status, notes=None):
@@ -281,7 +384,6 @@ def regenerate_audio(choice):
             return False
 
         generate_choice_audio(choice, force=True)
-
         return True
 
     except Exception as e:
@@ -310,9 +412,10 @@ def handle_command(cmd, db, filename, choice, context=None):
             return False
         case "p":
             console.print("\n[cyan]Playing choice audio...[/]")
-            play_audio(choice.output, block=False)
+            play_audio(choice.output)
             return True
         case "0":
+            console.print("\n[cyan]Playing choice + next dialogue...[/]")
             play_choice_and_next(choice)
             return True
         case "1" | "2" | "3":
@@ -323,15 +426,29 @@ def handle_command(cmd, db, filename, choice, context=None):
         case "g":
             # Regenerate in place, staying in the same menu
             if regenerate_audio(choice):
-                play_audio(choice.output, block=False)
+                console.print("\n[cyan]Playing regenerated audio...[/]")
+                play_audio(choice.output)
                 save_annotation(db, filename, AnnotationStatus.PENDING)
+                console.print("[green]Regenerated audio marked as PENDING for review.[/]")
+            return True
+        case "x":
+            # Stop playback
+            sound_player.stop()
+            console.print("[yellow]Playback stopped[/]")
             return True
         case "n":
             console.print("[dim]Moving to next choice...[/]")
             return False
         case "q":
             console.print("[yellow]Quitting annotation...[/]")
+            sound_player.shutdown()
             raise typer.Exit()
+        case readchar.key.ESCAPE:
+            # Stop playback on ESC
+            sound_player.stop()
+            sound_player.clear()
+            console.print("[yellow]Playback stopped[/]")
+            return True
         case _:
             console.print("[red]Invalid action.[/]")
             return True
@@ -339,7 +456,7 @@ def handle_command(cmd, db, filename, choice, context=None):
 
 def run_command_loop(db, filename, choice):
     """
-    Run a command loop for user interaction.
+    Run a command loop for user interaction with single keypress commands.
     Returns True if the loop completed normally, False if it should exit early.
     """
     # Setup menu display
@@ -350,19 +467,22 @@ def run_command_loop(db, filename, choice):
     console.print(
         "[cyan]p[/]: play choice  [cyan]0[/]: play with next line  [cyan]1-3[/]: play with previous lines"
     )
-    console.print("[cyan]g[/]: regenerate audio  [cyan]n[/]: next  [cyan]q[/]: quit")
+    console.print("[cyan]g[/]: regenerate audio  [cyan]x[/]: stop playback  [cyan]n[/]: next  [cyan]q[/]: quit")
+    console.print("[cyan]ESC[/]: stop playback")
 
     while True:
         try:
-            current_status = get_annotation_status(db, filename)
-            action = input("\nChoose action: ").strip().lower()
-
+            console.print("\nPress a key for action: ", end="")
+            action = readchar.readkey()
+            console.print(action)  # Echo the key pressed
+            
             # Process the command
             should_continue = handle_command(action, db, filename, choice)
             if not should_continue:
                 return True
         except KeyboardInterrupt:
             console.print("[yellow]\nQuitting annotation...[/]")
+            sound_player.shutdown()
             raise typer.Exit()
         except Exception as e:
             console.print(f"[red]Error processing input: {e}[/]")
@@ -383,67 +503,75 @@ def annotate(
     """
     Interactive CLI for annotating audio files.
     """
-    # Load data and setup database
-    db = setup_db()
-    choices = load_choices()
+    # Initialize the sound player
+    sound_player.start()
+    
+    try:
+        # Load data and setup database
+        db = setup_db()
+        choices = load_choices()
 
-    # Display progress
-    display_annotation_progress(db)
+        # Display progress
+        display_annotation_progress(db)
 
-    # Filter choices based on options
-    all_choices = choices.choices
-    if pending_only:
-        filtered_choices = []
-        for choice in all_choices:
-            if not choice.output:
+        # Filter choices based on options
+        all_choices = choices.choices
+        if pending_only:
+            filtered_choices = []
+            for choice in all_choices:
+                if not choice.output:
+                    continue
+                filename = choice.output.name
+                status = get_annotation_status(db, filename)
+                if status == AnnotationStatus.PENDING:
+                    filtered_choices.append(choice)
+            working_choices = filtered_choices
+        else:
+            working_choices = [c for c in all_choices if c.output]
+
+        # Apply start index and limit
+        if limit:
+            working_choices = working_choices[start_index : start_index + limit]
+        else:
+            working_choices = working_choices[start_index:]
+
+        if not working_choices:
+            console.print("[yellow]No choices to annotate based on your filters.[/]")
+            return
+
+        console.print(f"[green]Loaded {len(working_choices)} choices for annotation.[/]")
+
+        # Annotation loop
+        for i, choice in enumerate(working_choices):
+            if not choice.output or not choice.output.exists():
+                console.print(f"[yellow]Skipping choice {i + start_index} - no audio file[/]")
                 continue
+
             filename = choice.output.name
-            status = get_annotation_status(db, filename)
-            if status == AnnotationStatus.PENDING:
-                filtered_choices.append(choice)
-        working_choices = filtered_choices
-    else:
-        working_choices = [c for c in all_choices if c.output]
+            current_status = get_annotation_status(db, filename)
 
-    # Apply start index and limit
-    if limit:
-        working_choices = working_choices[start_index : start_index + limit]
-    else:
-        working_choices = working_choices[start_index:]
+            console.print(
+                f"\n[bold cyan]Choice {i + start_index + 1}/{len(working_choices)} - Current status: {current_status}[/]"
+            )
+            console.print(f"[dim]File: {choice.output}[/]")
 
-    if not working_choices:
-        console.print("[yellow]No choices to annotate based on your filters.[/]")
-        return
+            # Show the dialogue context
+            print_choice_context(choice)
 
-    console.print(f"[green]Loaded {len(working_choices)} choices for annotation.[/]")
+            # Play choice audio
+            console.print("\n[cyan]Playing choice audio...[/]")
+            play_audio(choice.output)
 
-    # Annotation loop
-    for i, choice in enumerate(working_choices):
-        if not choice.output or not choice.output.exists():
-            console.print(f"[yellow]Skipping choice {i + start_index} - no audio file[/]")
-            continue
+            # Run the main command loop for this choice
+            run_command_loop(db, filename, choice)
 
-        filename = choice.output.name
-        current_status = get_annotation_status(db, filename)
-
-        console.print(
-            f"\n[bold cyan]Choice {i + start_index + 1}/{len(working_choices)} - Current status: {current_status}[/]"
-        )
-        console.print(f"[dim]File: {choice.output}[/]")
-
-        # Show the dialogue context
-        print_choice_context(choice)
-
-        # Play choice audio
-        console.print("\n[cyan]Playing choice audio...[/]")
-        play_audio(choice.output, block=False)
-
-        # Run the main command loop for this choice
-        run_command_loop(db, filename, choice)
-
-    # Final progress report
-    console.print("\n[bold green]Annotation session completed![/]")
-    display_annotation_progress(db)
+        # Final progress report
+        console.print("\n[bold green]Annotation session completed![/]")
+        display_annotation_progress(db)
+        
+    finally:
+        # Make sure to shut down the player thread when the program exits
+        sound_player.shutdown()
 
 
 if __name__ == "__main__":
