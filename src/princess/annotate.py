@@ -168,60 +168,55 @@ def display_annotation_progress(db):
     console.print(table)
 
 
-def play_audio(audio_path):
+def play_audio(audio_path, block=True):
     # pygame is the only method that doesn't cut-off the audio at the end
     pygame.mixer.music.load(audio_path)
     pygame.mixer.music.play()
+    if block:
+        while pygame.mixer.music.get_busy():
+            continue
 
 
 def play_context_and_choice(choice, previous_count=1):
     """Play previous context and the choice back to back."""
-    try:
-        import time
+    # Get the previous dialogues based on the requested count
+    prev_dialogues = choice.previous_dialogues[-previous_count:] if previous_count > 0 else []
 
-        # Get the previous dialogues based on the requested count
-        prev_dialogues = choice.previous_dialogues[-previous_count:] if previous_count > 0 else []
+    if not prev_dialogues:
+        # If no previous dialogues, just play the choice
+        console.print("[yellow]No previous dialogues to play, playing choice only.[/]")
+        play_audio(choice.output, block=False)
+        return
 
-        if not prev_dialogues:
-            # If no previous dialogues, just play the choice
-            console.print("[yellow]No previous dialogues to play, playing choice only.[/]")
-            play_audio(choice.output)
-            return
+    console.print(f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice...[/]")
+    game_path = get_game_path()
 
-        console.print(f"[cyan]Playing {len(prev_dialogues)} previous dialogue(s) + choice...[/]")
-        time.sleep(0.5)  # Short pause
+    # Play each dialogue sequentially
+    for i, dialogue in enumerate(prev_dialogues):
+        console.print(f"[dim cyan]Previous dialogue {i + 1}/{len(prev_dialogues)}:[/]")
 
-        game_path = get_game_path()
+        if isinstance(dialogue, Dialogue):
+            text = f"{dialogue.character}: {strip_formatting(dialogue.dialogue)}"
+            console.print(f"[dim]{text}[/]")
 
-        # Play each dialogue sequentially
-        for i, dialogue in enumerate(prev_dialogues):
-            console.print(f"[dim cyan]Previous dialogue {i + 1}/{len(prev_dialogues)}:[/]")
-
-            if isinstance(dialogue, Dialogue):
-                text = f"{dialogue.character}: {strip_formatting(dialogue.dialogue)}"
-                console.print(f"[dim]{text}[/]")
-
-                # Use the existing voice file if available
-                if dialogue.voice:
-                    voice_path = game_path / dialogue.voice
-                    play_audio(voice_path)
-                else:
-                    console.print("[yellow]No voice file for this dialogue[/]")
+            # Use the existing voice file if available
+            if dialogue.voice:
+                voice_path = game_path / dialogue.voice
+                play_audio(voice_path)
             else:
-                # It's a Choice object
-                text = f"Choice: {strip_formatting(dialogue.choice)}"
-                console.print(f"[dim]{text}[/]")
+                console.print("[yellow]No voice file for this dialogue[/]")
+        else:
+            # It's a Choice object
+            text = f"Choice: {strip_formatting(dialogue.choice)}"
+            console.print(f"[dim]{text}[/]")
 
-            time.sleep(0.2)  # Short pause between dialogues
+        time.sleep(0.1)  # Short pause between dialogues
 
-        time.sleep(0.2)  # Short pause
+    time.sleep(0.1)  # Short pause
 
-        # Play the choice audio
-        console.print(f"[cyan]Main choice: {strip_formatting(choice.choice)}[/]")
-        play_audio(choice.output)
-
-    except Exception as e:
-        console.print(f"[red]Error playing context audio: {e}[/]")
+    # Play the choice audio
+    console.print(f"[cyan]Main choice: {strip_formatting(choice.choice)}[/]")
+    play_audio(choice.output, block=False)
 
 
 def save_annotation(db, filename, status, notes=None):
@@ -413,7 +408,7 @@ def annotate(
 
         # Play choice audio
         console.print("\n[cyan]Playing choice audio...[/]")
-        play_audio(choice.output)
+        play_audio(choice.output, block=False)
         
         # Run the main command loop for this choice
         run_command_loop(db, filename, choice)
