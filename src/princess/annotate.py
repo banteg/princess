@@ -242,13 +242,6 @@ def regenerate_audio(choice):
             console.print("[red]Error: No clean text available for this choice[/]")
             return False
             
-        # Create a backup of the original file
-        if choice.output.exists():
-            backup_path = choice.output.with_suffix(".flac.bak")
-            if not backup_path.exists():  # Only backup if not already backed up
-                choice.output.rename(backup_path)
-                console.print(f"[dim]Original audio backed up to: {backup_path}[/]")
-        
         # Generate new audio using the existing function
         console.print("[cyan]Generating new audio...[/]")
         generate_choice_audio(choice, force=True)
