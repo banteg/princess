@@ -172,8 +172,6 @@ def play_audio(audio_path):
     # pygame is the only method that doesn't cut-off the audio at the end
     pygame.mixer.music.load(audio_path)
     pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        continue
 
 
 def play_context_and_choice(choice, previous_count=1):
