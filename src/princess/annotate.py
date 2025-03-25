@@ -291,7 +291,7 @@ def handle_command(cmd, db, filename, choice, context=None):
             return False
         case "p":
             console.print("\n[cyan]Playing choice audio...[/]")
-            play_audio(choice.output)
+            play_audio(choice.output, block=False)
             return True
         case "1" | "2" | "3":
             play_count = int(cmd)
