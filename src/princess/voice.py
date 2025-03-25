@@ -66,8 +66,8 @@ def sesame(text: str, context: list[Segment], output: Path, max_length: float = 
         max_audio_length_ms=int(max_length * 1000),
         sampler=sampler,
     )
-    max_samples = int(max_length * 1000) * target_sample_rate
-    if len(signal) == max_samples:
+    max_samples = max_length * target_sample_rate
+    if len(signal) >= max_samples * 0.95:
         rich.print("[red]Warning: max length reached, possibly a bad generation or truncation[/]")
     audiofile.write(output, signal, target_sample_rate)
 
