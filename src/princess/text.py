@@ -8,9 +8,6 @@ from princess.models import Dialogue, Choice, ChoiceResult
 rewrites = {
     "N-no. I w-won't t-tell you.": "No, I won't tell you.",
 }
-replacements = {
-    "'Mr. Anatomy'": "Mr. Anatomy",
-}
 
 
 def strip_formatting(text: str):
@@ -36,6 +33,7 @@ def clean_choice_for_voice(choice: str) -> str | None:
     actions_re = re.compile(r"\[\[[^]]+\]")
     quoted_text_re = re.compile(r"''(.+?)''")
     unwanted_re = re.compile(r"Ugh!|\(|\)")
+    quotes_re = re.compile(r"(?<!\w)'|'(?!\w)")
     special_re = re.compile(
         r"^(Say|Join|Follow|Play|Return|Make|Continue|Ignore|Embrace|Investigate|Go|Do|Drop|Tighten|Kneel|Force|Try)\s"
     )
@@ -45,9 +43,7 @@ def clean_choice_for_voice(choice: str) -> str | None:
     choice = prefixes_re.sub("", choice)
     choice = actions_re.sub("", choice)
     choice = unwanted_re.sub("", choice)
-
-    for old, new in replacements.items():
-        choice = choice.replace(old, new)
+    choice = quotes_re.sub("", choice)
 
     # quoted text is 100% spoken dialogue
     if quoted_text := quoted_text_re.findall(choice):
